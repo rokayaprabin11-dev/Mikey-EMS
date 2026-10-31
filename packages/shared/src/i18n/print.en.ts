@@ -9,13 +9,16 @@ export const printEn = {
     esewa: 'eSewa',
     khalti: 'Khalti',
   },
-  receipt: {
-    title: 'Fee receipt',
+  document: {
     original: 'Original',
     copy: (printNo: number) => `Copy of original, print #${printNo}`,
-    voided: 'VOID',
     phone: 'Phone',
     pan: 'PAN',
+    printed: (time: string, computer: number) => `Printed ${time}, Computer ${computer}`,
+  },
+  receipt: {
+    title: 'Fee receipt',
+    voided: 'VOID',
     receiptNo: 'Receipt no.',
     date: 'Date',
     fiscalYear: 'Fiscal year',
@@ -44,6 +47,5 @@ export const printEn = {
     stamp: ['School', 'stamp'],
     signature: 'Authorized signature',
     keep: 'Keep this receipt.',
-    printed: (time: string, computer: number) => `Printed ${time}, Computer ${computer}`,
   },
 } as const
