@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify'
 import { writeAudit } from '../audit.ts'
 import { MINUTE } from '../auth/sessions.ts'
 import type { AppDeps, Db } from '../deps.ts'
-import { errors } from '../errors.ts'
+import { fail } from '../errors.ts'
 import { registerRoute } from '../http/route.ts'
 import { isLoopback } from '../network.ts'
 import { isAllowedComputer } from './allow-list.ts'
@@ -75,7 +75,7 @@ export function registerConnectionRoutes(app: FastifyInstance, deps: AppDeps): v
       }
 
       if ((await tx.connectionRequest.count({ where: { status: 'pending' } })) >= PENDING_LIMIT) {
-        throw errors.connectionRequestsFull()
+        throw fail('CONNECTION_REQUESTS_FULL')
       }
       await tx.connectionRequest.create({
         data: { ip, computerName: body.computerName, requestedAt: now, lastSeenAt: now },
@@ -113,10 +113,10 @@ export function registerConnectionRoutes(app: FastifyInstance, deps: AppDeps): v
       await lockConnectionList(tx)
       const request = await tx.connectionRequest.findUnique({ where: { id: params.requestId } })
       if (request === null) {
-        throw errors.notFound('This request')
+        throw fail('NOT_FOUND', { what: 'request' })
       }
       if (request.status !== 'pending' || request.lastSeenAt < expiryCutoff(now)) {
-        throw errors.requestNotPending()
+        throw fail('REQUEST_NOT_PENDING')
       }
       await tx.connectionRequest.update({
         where: { id: request.id },
@@ -143,10 +143,10 @@ export function registerConnectionRoutes(app: FastifyInstance, deps: AppDeps): v
       await lockConnectionList(tx)
       const request = await tx.connectionRequest.findUnique({ where: { id: params.requestId } })
       if (request === null) {
-        throw errors.notFound('This request')
+        throw fail('NOT_FOUND', { what: 'request' })
       }
       if (request.status !== 'pending' || request.lastSeenAt < expiryCutoff(now)) {
-        throw errors.requestNotPending()
+        throw fail('REQUEST_NOT_PENDING')
       }
       await tx.connectionRequest.update({
         where: { id: request.id },
@@ -167,13 +167,13 @@ export function registerConnectionRoutes(app: FastifyInstance, deps: AppDeps): v
 
   registerRoute(app, deps, 'addAllowedComputer', ({ body, session, now, computer }) => {
     if (isLoopback(body.ip)) {
-      throw errors.alwaysAllowed()
+      throw fail('ALWAYS_ALLOWED')
     }
     return deps.db.$transaction(async (tx) => {
       await lockConnectionList(tx)
       const existing = await tx.allowedComputer.findUnique({ where: { ip: body.ip } })
       if (existing !== null && existing.removedAt === null) {
-        throw errors.alreadyAllowed()
+        throw fail('ALREADY_ALLOWED')
       }
       const allowed = await allowIp(tx, body.ip, body.computerName, session.user.id, now)
       await tx.connectionRequest.updateMany({
@@ -200,10 +200,10 @@ export function registerConnectionRoutes(app: FastifyInstance, deps: AppDeps): v
       await lockConnectionList(tx)
       const existing = await tx.allowedComputer.findUnique({ where: { id: params.computerId } })
       if (existing === null) {
-        throw errors.notFound('This computer')
+        throw fail('NOT_FOUND', { what: 'computer' })
       }
       if (existing.removedAt !== null) {
-        throw errors.alreadyRemoved()
+        throw fail('ALREADY_REMOVED')
       }
       await tx.allowedComputer.update({
         where: { id: existing.id },

@@ -4,7 +4,7 @@ import type { z } from 'zod'
 
 import { authenticate, type RequestContext, type SessionContext } from '../auth/sessions.ts'
 import type { AppDeps } from '../deps.ts'
-import { errors } from '../errors.ts'
+import { fail } from '../errors.ts'
 import { isLoopback, isOnLocalNetwork, normalizeIp } from '../network.ts'
 import { isAllowedComputer } from '../system/allow-list.ts'
 
@@ -35,9 +35,9 @@ function parseInput(schema: z.ZodType | undefined, value: unknown): unknown {
   }
   const result = schema.safeParse(value)
   if (!result.success) {
-    throw errors.validationFailed(
-      result.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
-    )
+    throw fail('VALIDATION_FAILED').withDetails({
+      issues: result.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
+    })
   }
   return result.data
 }
@@ -53,19 +53,19 @@ async function checkAccess(
   }
   if (access === 'local_network') {
     if (!isOnLocalNetwork(context.ip, deps.networkInterfaces())) {
-      throw errors.notOnLocalNetwork()
+      throw fail('NOT_ON_LOCAL_NETWORK')
     }
     return null
   }
   if (!(await isAllowedComputer(deps.db, context.ip))) {
-    throw errors.notAllowed()
+    throw fail('NOT_ALLOWED')
   }
   if (access === 'allowed_computer') {
     return null
   }
   const session = await authenticate(deps, authorization, context)
   if (access !== 'signed_in' && !session.permissions.has(access)) {
-    throw errors.noPermission()
+    throw fail('NO_PERMISSION')
   }
   return session
 }

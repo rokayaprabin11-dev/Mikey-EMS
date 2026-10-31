@@ -1,6 +1,7 @@
 export * from './money.ts'
 export * from './date.ts'
 export * from './permissions.ts'
+export * from './errors.ts'
 export * from './api/common.ts'
 export * from './api/system.ts'
 export * from './api/auth.ts'

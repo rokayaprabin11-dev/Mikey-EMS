@@ -2,7 +2,7 @@ import { type Receipt, receiptSnapshotSchema } from '@mikey/shared'
 
 import type { RequestContext, SessionContext } from '../auth/sessions.ts'
 import type { AppDeps, Db } from '../deps.ts'
-import { errors } from '../errors.ts'
+import { fail } from '../errors.ts'
 import { renderReceipt } from '../pdf/receipt.ts'
 
 function statusOf(payment: { voidRecord: object | null; voidRequests: readonly object[] }): Receipt['status'] {
@@ -27,7 +27,7 @@ export async function readReceipt(db: Db, paymentId: string): Promise<Receipt> {
     },
   })
   if (row === null) {
-    throw errors.notFound('This receipt')
+    throw fail('NOT_FOUND', { what: 'receipt' })
   }
   return {
     paymentId,
@@ -49,7 +49,7 @@ export async function printOriginal(deps: AppDeps, input: PrintInput): Promise<B
     select: { id: true, snapshot: true },
   })
   if (receipt === null) {
-    throw errors.notFound('This receipt')
+    throw fail('NOT_FOUND', { what: 'receipt' })
   }
   const pdf = await renderReceipt(receiptSnapshotSchema.parse(receipt.snapshot), {
     printedAt: input.now,
@@ -59,7 +59,7 @@ export async function printOriginal(deps: AppDeps, input: PrintInput): Promise<B
     // Two counters pressing Print at the same moment must not both get the original.
     await tx.$executeRaw`SELECT id FROM receipts WHERE id = ${receipt.id}::uuid FOR UPDATE`
     if ((await tx.receiptPrint.count({ where: { receiptId: receipt.id } })) > 0) {
-      throw errors.alreadyPrinted()
+      throw fail('ALREADY_PRINTED')
     }
     await tx.receiptPrint.create({
       data: {

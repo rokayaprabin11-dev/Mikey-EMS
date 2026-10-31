@@ -2,7 +2,7 @@ import type { LoginRequest, LoginResponse, PermissionKey } from '@mikey/shared'
 
 import { type AuditEntry, writeAudit } from '../audit.ts'
 import type { AppDeps } from '../deps.ts'
-import { errors } from '../errors.ts'
+import { fail } from '../errors.ts'
 import { checkPassword } from './passwords.ts'
 import { IDLE_MINUTES, MINUTE, newSessionToken, permissionsOf, type RequestContext, SESSION_HOURS } from './sessions.ts'
 
@@ -37,7 +37,7 @@ export async function signIn(deps: AppDeps, request: LoginRequest, context: Requ
       area: 'Sign-in',
       summary: `Sign-in with unknown username on Computer ${computer} (${context.ip})`,
     })
-    throw errors.wrongCredentials()
+    throw fail('WRONG_USERNAME_OR_PASSWORD')
   }
 
   const audit = (action: string, summary: string): AuditEntry => ({
@@ -108,13 +108,13 @@ export async function signIn(deps: AppDeps, request: LoginRequest, context: Requ
   })
 
   if (outcome.result === 'locked') {
-    throw errors.accountLocked(Math.ceil((outcome.until.getTime() - now.getTime()) / MINUTE))
+    throw fail('ACCOUNT_LOCKED', { minutes: Math.ceil((outcome.until.getTime() - now.getTime()) / MINUTE) })
   }
   if (outcome.result === 'wrong_password') {
-    throw errors.wrongCredentials()
+    throw fail('WRONG_USERNAME_OR_PASSWORD')
   }
   if (outcome.result === 'inactive') {
-    throw errors.accountInactive()
+    throw fail('ACCOUNT_INACTIVE')
   }
   return {
     token: outcome.token,

@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 
 import { registerAuthRoutes } from './auth/routes.ts'
 import type { AppDeps } from './deps.ts'
-import { AppError, errors } from './errors.ts'
+import { AppError, fail } from './errors.ts'
 import { registerFeeRoutes } from './fees/routes.ts'
 import { registerConnectionRoutes } from './system/connections.ts'
 import { registerHealthRoute } from './system/health.ts'
@@ -26,12 +26,12 @@ export function buildApp(deps: AppDeps, options: { logger: boolean }): FastifyIn
       return reply.code(error.status).send(error.toBody())
     }
     if (isRefusedByFastify(error)) {
-      return reply.code(400).send(errors.badRequest().toBody())
+      return reply.code(400).send(fail('BAD_REQUEST').toBody())
     }
     request.log.error(error)
-    return reply.code(500).send(errors.internal().toBody())
+    return reply.code(500).send(fail('INTERNAL_ERROR').toBody())
   })
-  app.setNotFoundHandler((_request, reply) => reply.code(404).send(errors.routeNotFound().toBody()))
+  app.setNotFoundHandler((_request, reply) => reply.code(404).send(fail('NOT_FOUND', { what: 'address' }).toBody()))
 
   registerHealthRoute(app, deps)
   registerAuthRoutes(app, deps)

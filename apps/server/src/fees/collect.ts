@@ -16,7 +16,7 @@ import { writeAudit } from '../audit.ts'
 import type { RequestContext, SessionContext } from '../auth/sessions.ts'
 import { toDbDate } from '../dates.ts'
 import type { AppDeps, Db } from '../deps.ts'
-import { errors } from '../errors.ts'
+import { fail } from '../errors.ts'
 import { readSetting } from '../settings.ts'
 import { readLedger, type StudentLedger } from './ledger.ts'
 import { readReceipt } from './receipts.ts'
@@ -35,13 +35,14 @@ interface Plan {
 
 function checkAmount(label: string, owed: boolean, remaining: bigint, amount: bigint): void {
   if (!owed) {
-    throw errors.dueNotOwed(label)
+    throw fail('DUE_NOT_OWED', { item: label })
   }
   if (remaining === 0n) {
-    throw errors.dueAlreadyPaid(label)
+    throw fail('DUE_ALREADY_PAID', { item: label })
   }
   if (amount > remaining) {
-    throw errors.amountExceedsDue(label, toPaisaNumber(amount), toPaisaNumber(remaining))
+    const params = { item: label, amount: toPaisaNumber(amount), remaining: toPaisaNumber(remaining) }
+    throw fail('AMOUNT_EXCEEDS_DUE', params).withDetails({ remaining: params.remaining })
   }
 }
 
@@ -52,7 +53,7 @@ function plan(ledger: StudentLedger, requested: CollectPaymentRequest['allocatio
     if (item.kind === 'fee') {
       const due = ledger.feeDues.find((row) => row.id === item.feeDueId)
       if (due === undefined) {
-        throw errors.dueNotFound()
+        throw fail('NOT_FOUND', { what: 'due' })
       }
       checkAmount(`${due.headName}, ${due.periodLabel}`, due.owed, due.remaining, amount)
       const settled = amount === due.remaining
@@ -72,7 +73,7 @@ function plan(ledger: StudentLedger, requested: CollectPaymentRequest['allocatio
     } else {
       const fine = ledger.fines.find((row) => row.id === item.fineId)
       if (fine === undefined) {
-        throw errors.dueNotFound()
+        throw fail('NOT_FOUND', { what: 'due' })
       }
       checkAmount(fine.reason, fine.owed, fine.remaining, amount)
       result.allocations.push({ feeDueId: null, fineId: fine.id, amountPaisa: amount })
@@ -91,18 +92,7 @@ async function receivingAccount(tx: Db, method: PaymentMethod): Promise<string> 
   if (account !== undefined && accounts.length === 1) {
     return account.id
   }
-  if (kind === 'cash') {
-    throw errors.accountNotSetUp(
-      account === undefined
-        ? 'There is no cash account on Computer 1. Ask the Super Admin to set one up.'
-        : 'Computer 1 has more than one cash account, so this version cannot choose one. Ask the Super Admin.',
-    )
-  }
-  throw errors.accountNotSetUp(
-    account === undefined
-      ? 'There is no bank account on Computer 1 for this payment. Ask the Super Admin to add one, or take cash.'
-      : 'Computer 1 has more than one bank account, so this version cannot choose which one this payment goes into. Ask the Super Admin.',
-  )
+  throw fail('ACCOUNT_NOT_SET_UP', { kind, several: accounts.length > 1 })
 }
 
 export async function collectPayment(deps: AppDeps, input: CollectInput): Promise<CollectPaymentResponse> {
@@ -129,7 +119,7 @@ export async function collectPayment(deps: AppDeps, input: CollectInput): Promis
     const [locked] = await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM students WHERE id = ${body.studentId}::uuid FOR UPDATE`
     if (locked === undefined) {
-      throw errors.notFound('This student')
+      throw fail('NOT_FOUND', { what: 'student' })
     }
 
     const ledger = await readLedger(tx, body.studentId)
@@ -137,7 +127,7 @@ export async function collectPayment(deps: AppDeps, input: CollectInput): Promis
     const accountId = await receivingAccount(tx, body.method)
     const school = await readSetting(tx, 'school.profile', schoolProfileSchema)
     if (school === null) {
-      throw errors.schoolNotSetUp()
+      throw fail('SCHOOL_NOT_SET_UP')
     }
     // One table per query, one query after another (CLAUDE.md).
     const student = await tx.student.findUniqueOrThrow({
@@ -155,7 +145,7 @@ export async function collectPayment(deps: AppDeps, input: CollectInput): Promis
       select: { rollNo: true, sessionId: true, sectionId: true },
     })
     if (enrollment === null) {
-      throw errors.studentNotInClass()
+      throw fail('STUDENT_NOT_IN_CLASS')
     }
     const academicSession = await tx.academicSession.findUniqueOrThrow({
       where: { id: enrollment.sessionId },

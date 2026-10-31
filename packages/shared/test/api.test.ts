@@ -206,10 +206,11 @@ describe('asking to connect', () => {
 })
 
 describe('error body', () => {
-  it('has a stable code and a message the user can read', () => {
-    const body = { error: { code: 'INSUFFICIENT_CASH', message: 'Cash in hand is Rs. 1,12,340.', details: {} } }
+  it('has a code from the shared list and a message the user can read', () => {
+    const body = { error: { code: 'DUE_ALREADY_PAID', message: 'Monthly tuition, Kartik 2083 has already been paid.', details: {} } }
     expect(errorBodySchema.safeParse(body).success).toBe(true)
-    expect(errorBodySchema.safeParse({ error: { ...body.error, code: 'insufficient cash' } }).success).toBe(false)
+    expect(errorBodySchema.safeParse({ error: { ...body.error, code: 'SOMETHING_ELSE' } }).success).toBe(false)
+    expect(errorBodySchema.safeParse({ error: { ...body.error, code: 'toString' } }).success).toBe(false)
   })
 })
 

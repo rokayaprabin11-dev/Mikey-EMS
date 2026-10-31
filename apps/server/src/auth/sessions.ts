@@ -4,7 +4,7 @@ import { type CurrentUser, PERMISSION_KEYS, type PermissionKey } from '@mikey/sh
 
 import { writeAudit } from '../audit.ts'
 import type { AppDeps, Db } from '../deps.ts'
-import { type AppError, errors } from '../errors.ts'
+import { type AppError, fail } from '../errors.ts'
 
 export const IDLE_MINUTES = 15
 export const SESSION_HOURS = 12
@@ -52,13 +52,13 @@ function endingOf(
   now: Date,
 ): Ending | null {
   if (session.user.status !== 'active') {
-    return { reason: 'because the account was switched off', error: errors.notSignedIn() }
+    return { reason: 'because the account was switched off', error: fail('NOT_SIGNED_IN') }
   }
   if (now >= session.expiresAt) {
-    return { reason: `after ${SESSION_HOURS} hours`, error: errors.signedInTooLong(SESSION_HOURS) }
+    return { reason: `after ${SESSION_HOURS} hours`, error: fail('SESSION_EXPIRED', { hours: SESSION_HOURS }) }
   }
   if (now.getTime() - session.lastSeenAt.getTime() >= IDLE_MINUTES * MINUTE) {
-    return { reason: `after ${IDLE_MINUTES} minutes without activity`, error: errors.idleSignedOut(IDLE_MINUTES) }
+    return { reason: `after ${IDLE_MINUTES} minutes without activity`, error: fail('SESSION_EXPIRED', { idleMinutes: IDLE_MINUTES }) }
   }
   return null
 }
@@ -70,14 +70,14 @@ export async function authenticate(
 ): Promise<SessionContext> {
   const token = /^Bearer (\S+)$/.exec(authorization ?? '')?.[1]
   if (token === undefined) {
-    throw errors.notSignedIn()
+    throw fail('NOT_SIGNED_IN')
   }
   const session = await deps.db.session.findUnique({
     where: { tokenHash: hashToken(token) },
     include: { user: { include: { role: true } } },
   })
   if (session === null) {
-    throw errors.notSignedIn()
+    throw fail('NOT_SIGNED_IN')
   }
 
   const { user } = session

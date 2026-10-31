@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { FIRST_BS_YEAR, LAST_BS_YEAR } from '../date.ts'
+import { errorCodeSchema } from '../errors.ts'
 
 export const idSchema = z.uuid()
 export const idempotencyKeySchema = z.uuid()
@@ -43,7 +44,7 @@ export const studentRefSchema = z.object({
 
 export const errorBodySchema = z.object({
   error: z.object({
-    code: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+    code: errorCodeSchema,
     message: z.string(),
     details: z.record(z.string(), z.unknown()),
   }),
