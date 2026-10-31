@@ -133,10 +133,22 @@ export const ERRORS = {
   },
   INSUFFICIENT_CASH: {
     status: 422,
-    en: (params: { balance: number; doing: 'expense' | 'transfer' }) =>
-      params.doing === 'expense'
-        ? `Cash in hand is ${formatRupees(params.balance)}. Pay this from the bank, or lower the amount.`
-        : `Cash in hand is ${formatRupees(params.balance)}. Move no more than that to the bank.`,
+    en: (params: { balance: number; doing: 'expense' | 'transfer' | 'void' }) =>
+      ({
+        expense: `Cash in hand is ${formatRupees(params.balance)}. Pay this from the bank, or lower the amount.`,
+        transfer: `Cash in hand is ${formatRupees(params.balance)}. Move no more than that to the bank.`,
+        void: `Cash in hand is ${formatRupees(params.balance)}. Move money from the bank to cash first, or void later.`,
+      })[params.doing],
+  },
+  CASH_BELOW_ZERO: {
+    status: 422,
+    en: (params: { short: number }) =>
+      `The cashbook shows ${formatRupees(params.short)} less than nothing in cash, so the day cannot be closed. Check the entries and the opening balance.`,
+  },
+  VOID_REQUEST_WAITING: {
+    status: 409,
+    en: (params: { what: 'receipt' | 'income' | 'expense' }) =>
+      `A void request for this ${params.what} is waiting. Approve or decline it first.`,
   },
   CATEGORY_INACTIVE: { status: 422, en: () => 'This category is no longer used. Choose another one.' },
   DAY_ALREADY_CLOSED: {

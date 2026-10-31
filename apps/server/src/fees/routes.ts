@@ -8,7 +8,7 @@ import { collectPayment } from './collect.ts'
 import { owedItems, readLedger } from './ledger.ts'
 import { listPayments } from './payments.ts'
 import { allowOriginal, printOriginal, readReceipt, reprint } from './receipts.ts'
-import { approveVoid, declineVoid, listVoidRequests, requestVoid } from './voids.ts'
+import { approveVoid, declineVoid, listVoidRequests, requestVoid, voidDirectly } from './voids.ts'
 
 export function registerFeeRoutes(app: FastifyInstance, deps: AppDeps): void {
   registerRoute(app, deps, 'studentDues', async ({ params }) => {
@@ -41,6 +41,8 @@ export function registerFeeRoutes(app: FastifyInstance, deps: AppDeps): void {
   registerRoute(app, deps, 'listPendingVoidRequests', async () => ({
     voidRequests: await listVoidRequests(deps.db, { status: 'pending' }, 'asc'),
   }))
+
+  registerRoute(app, deps, 'voidDirectly', (input) => voidDirectly(deps, input))
 
   registerRoute(app, deps, 'approveVoid', (input) => approveVoid(deps, input))
 

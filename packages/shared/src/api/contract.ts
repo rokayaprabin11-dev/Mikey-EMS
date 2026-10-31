@@ -209,6 +209,13 @@ export const endpoints = {
     access: 'payments.void',
     response: voidRequestsResponseSchema,
   },
+  voidDirectly: {
+    method: 'POST',
+    path: '/voids',
+    access: 'payments.void',
+    body: voidRequestCreateSchema,
+    response: voidRequestSchema,
+  },
   approveVoid: {
     method: 'POST',
     path: '/void-requests/:requestId/approve',

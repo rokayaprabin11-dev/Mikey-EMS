@@ -50,13 +50,15 @@ export async function listAccounts(db: Db): Promise<AccountsResponse> {
   const accounts = await db.account.findMany({ orderBy: [{ kind: 'asc' }, { name: 'asc' }] })
   const result: AccountsResponse['accounts'] = []
   for (const account of accounts) {
+    const balance = await balanceOf(db, account.id)
     result.push({
       id: account.id,
       name: account.name,
       kind: account.kind,
       bankName: account.bankName,
       accountNoLast4: account.accountNoLast4,
-      balance: toPaisaNumber(await balanceOf(db, account.id)),
+      balance: toPaisaNumber(balance),
+      belowZero: balance < 0n,
     })
   }
   return { accounts: result }

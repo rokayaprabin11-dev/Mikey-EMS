@@ -65,6 +65,9 @@ export async function closeDay(deps: AppDeps, input: CloseInput): Promise<DayClo
       throw fail('DAY_ALREADY_CLOSED')
     }
     const expected = await balanceOf(tx, cash.id, { through: today })
+    if (expected < 0n) {
+      throw fail('CASH_BELOW_ZERO', { short: toPaisaNumber(-expected) })
+    }
     const counted = body.counts.reduce((sum, item) => sum + BigInt(item.note) * 100n * BigInt(item.count), 0n)
     const note = body.note === undefined || body.note === '' ? null : body.note
     const row = await tx.dayClose.create({

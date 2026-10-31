@@ -44,7 +44,7 @@ export async function listPayments(db: Db, query: PaymentsListQuery, session: Se
       id: true,
       studentId: true,
       createdAt: true,
-      receipt: { select: { snapshot: true } },
+      receipt: { select: { snapshot: true, _count: { select: { allowances: true } } } },
       voidRecord: { select: { id: true } },
       voidRequests: { where: { status: 'pending' }, select: { id: true } },
     },
@@ -68,6 +68,7 @@ export async function listPayments(db: Db, query: PaymentsListQuery, session: Se
       method: snapshot.method,
       status: recordStatus(row),
       amount: snapshot.totals.amountPaid,
+      extraOriginalsAllowed: row.receipt._count.allowances,
     }
   })
   const total = payments.filter((payment) => payment.status !== 'voided').reduce((sum, payment) => sum + payment.amount, 0)

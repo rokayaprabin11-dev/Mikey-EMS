@@ -30,6 +30,7 @@ export const accountSchema = accountRefSchema.extend({
   bankName: z.string().nullable(),
   accountNoLast4: z.string().regex(/^\d{4}$/).nullable(),
   balance: balanceSchema,
+  belowZero: z.boolean(),
 })
 
 export const accountsResponseSchema = z.object({

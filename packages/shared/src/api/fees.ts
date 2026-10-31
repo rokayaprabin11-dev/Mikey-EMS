@@ -171,6 +171,8 @@ export const paymentListItemSchema = z.object({
   method: paymentMethodSchema,
   status: recordStatusSchema,
   amount: positivePaisaSchema,
+  // How many times the Super Admin allowed one more original of this receipt.
+  extraOriginalsAllowed: countSchema,
 })
 
 // `total` leaves out voided receipts.
@@ -229,6 +231,8 @@ export const voidRequestSchema = z.object({
   decidedAt: timestampSchema.nullable(),
   decidedBy: z.string().nullable(),
   decisionNote: z.string().nullable(),
+  // The Super Admin voided it in one step, without a separate approval.
+  direct: z.boolean(),
 })
 
 export const voidRequestsResponseSchema = z.object({

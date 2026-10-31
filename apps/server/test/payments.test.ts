@@ -251,6 +251,12 @@ describe('one more original', () => {
     expect(again.text).toContain('Original')
     expect(await server.db.receiptPrint.findFirst({ where: { allowanceId: allowance.id } })).toMatchObject({ printNo: 2 })
     expect(errorOf(await post(asAccountant(), `/payments/${paymentId}/print`)).code).toBe('ALREADY_PRINTED')
+
+    // Each permission is its own, with its own reason and audit row, and the list counts them.
+    expect((await allow(asAdmin(), { reason: 'Jammed again on the second original.' })).statusCode).toBe(204)
+    const listed = paymentsListResponseSchema.parse((await get(asAdmin(), '/payments?date=2026-10-31')).json())
+    expect(listed.payments.find((payment) => payment.paymentId === paymentId)).toMatchObject({ extraOriginalsAllowed: 2 })
+    expect(await server.db.auditLog.count({ where: { action: 'receipts.original_allowed', recordId: allowance.receiptId } })).toBe(2)
   })
 
   it('has nothing to allow before the original has been printed', async () => {
@@ -322,6 +328,58 @@ describe('void requests', () => {
     expect(errorOf(await requestVoid(asAccountant(), randomUUID()))).toMatchObject({ status: 404, code: 'NOT_FOUND' })
     const { paymentId } = await paidReceipt()
     expect(errorOf(await requestVoid(asAccountant(), paymentId, ' '))).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' })
+  })
+})
+
+describe('direct void', () => {
+  it('lets the Super Admin void in one step, with a reason, kept as a direct request and a void', async () => {
+    const { paymentId } = await paidReceipt()
+    await post(asAccountant(), `/payments/${paymentId}/print`)
+
+    const response = await post(asAdmin(), '/voids', {
+      target: { type: 'payment', id: paymentId },
+      reason: 'wrong_amount',
+      details: 'The guardian paid twice by mistake.',
+    })
+    expect(response.statusCode, response.body).toBe(200)
+    expect(voidRequestSchema.parse(response.json())).toMatchObject({
+      status: 'approved',
+      direct: true,
+      requestedBy: 'Test Super Admin',
+      decidedBy: 'Test Super Admin',
+      details: 'The guardian paid twice by mistake.',
+    })
+    expect(await server.db.voidRecord.findUnique({ where: { paymentId } })).toMatchObject({ voidedById: admin.id })
+    expect(await server.db.accountEntry.findMany({ where: { voidRecord: { paymentId } } })).toMatchObject([
+      { direction: 'out', amountPaisa: 355_000n, entryDate: new Date('2026-10-31T00:00:00.000Z') },
+    ])
+    const audit = await server.db.auditLog.findFirst({ where: { action: 'payments.voided', recordId: paymentId } })
+    expect(audit?.summary).toMatch(/^Voided directly by Test Super Admin: receipt /)
+    expect((await printed(asAccountant(), paymentId, 'reprint')).text).toContain('VOID')
+  })
+
+  it('an Accountant calling the direct void route gets 403', async () => {
+    const { paymentId } = await paidReceipt()
+    const response = await post(asAccountant(), '/voids', {
+      target: { type: 'payment', id: paymentId },
+      reason: 'other',
+      details: 'Not allowed.',
+    })
+    expect(errorOf(response)).toMatchObject({ status: 403, code: 'NO_PERMISSION' })
+  })
+
+  it('needs a reason, and waits while a request for the same receipt is open', async () => {
+    const { paymentId } = await paidReceipt()
+    const noReason = await post(asAdmin(), '/voids', { target: { type: 'payment', id: paymentId }, reason: 'other', details: ' ' })
+    expect(errorOf(noReason)).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' })
+
+    await requested(asAccountant(), paymentId)
+    const waiting = await post(asAdmin(), '/voids', { target: { type: 'payment', id: paymentId }, reason: 'other', details: 'Duplicate.' })
+    expect(errorOf(waiting)).toEqual({
+      status: 409,
+      code: 'VOID_REQUEST_WAITING',
+      message: 'A void request for this receipt is waiting. Approve or decline it first.',
+    })
   })
 })
 

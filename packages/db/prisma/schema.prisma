@@ -550,6 +550,8 @@ model VoidRequest {
   decidedById   String?           @map("decided_by") @db.Uuid
   decidedAt     DateTime?         @map("decided_at") @db.Timestamptz
   decisionNote  String?           @map("decision_note")
+  // A void the Super Admin made in one step: requested and approved by the same person.
+  direct        Boolean           @default(false)
 
   payment     Payment?    @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   income      Income?     @relation(fields: [incomeId], references: [id], onDelete: Restrict)

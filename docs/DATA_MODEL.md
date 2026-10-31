@@ -55,7 +55,7 @@ Conventions:
 | `receipt_counters` | fiscal_year (PK), last_seq | Locked `FOR UPDATE` when issuing |
 | `receipt_prints` | receipt_id, print_no, computer, printed_by, printed_at, allowance_id? (unique) | Unique (receipt_id, print_no). Print 1 is the original; a print with an `allowance_id` is the one more original that allowance permitted; every other print is a copy, marked "Copy of original, print #N". The print count is the number of rows |
 | `original_print_allowances` | receipt_id, reason, allowed_by, allowed_at | The Super Admin's permission for one more original after a failed print. Reason never blank (`CHECK`). Used up by the print that points at it. Insert only |
-| `void_requests` | payment_id? / income_id? / expense_id?, reason_code (`wrong_student`, `wrong_amount`, `wrong_method`, `other`), details, status (`pending`, `approved`, `declined`), requested_by, requested_at, decided_by?, decided_at?, decision_note? | Exactly one target. At most one pending request per record (partial unique indexes). `details` is never empty |
+| `void_requests` | payment_id? / income_id? / expense_id?, reason_code (`wrong_student`, `wrong_amount`, `wrong_method`, `other`), details, status (`pending`, `approved`, `declined`), requested_by, requested_at, decided_by?, decided_at?, decision_note?, direct | Exactly one target. At most one pending request per record (partial unique indexes). `details` is never empty. `direct` marks a void the Super Admin made in one step; a direct request is approved and was decided by the person who made it (check) |
 | `voids` | payment_id? / income_id? / expense_id? (each unique), reason_code, note?, void_request_id? (unique), voided_by, voided_at | Exactly one target; one void per record |
 
 ## Accounts

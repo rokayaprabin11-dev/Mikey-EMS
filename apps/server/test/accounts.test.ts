@@ -108,10 +108,10 @@ async function approveVoid(target: { type: 'payment' | 'income' | 'expense'; id:
   expect(approved.statusCode, approved.body).toBe(200)
 }
 
-// A second server whose clock is on a BS day of 2083 that no other test uses.
-async function onDay(month: number, day: number) {
+// A second server whose clock is on a BS day that no other test uses.
+async function onDay(month: number, day: number, year = 2083) {
   const other = startTestServer()
-  const date = bsToAd({ year: 2083, month, day })
+  const date = bsToAd({ year, month, day })
   other.advanceMinutes((new Date(`${date}T10:00:00+05:45`).getTime() - other.now().getTime()) / 60_000)
   return {
     other,
@@ -449,5 +449,104 @@ describe('voiding income and expenses', () => {
     expect(await balance(asAccountant, school.bankId)).toBe(bank - 124_000)
     const pending = await post(asAdmin, '/void-requests', { target: { type: 'income', id: randomUUID() }, reason: 'other', details: 'x' })
     expect(errorOf(pending)).toMatchObject({ status: 404, code: 'NOT_FOUND' })
+  })
+})
+
+describe('keeping cash at or above zero', () => {
+  async function cashReceipt(as: Caller) {
+    const student = await createStudent(as.on.db, school)
+    const kartik = await addDue(as.on.db, school, student.id, { month: 7, rupees: 3550 })
+    const response = await post(as, '/payments', {
+      idempotencyKey: randomUUID(),
+      studentId: student.id,
+      method: 'cash',
+      allocations: [{ kind: 'fee', feeDueId: kartik.id, amount: 355_000 }],
+    })
+    return collectPaymentResponseSchema.parse(response.json()).receipt
+  }
+
+  function move(as: Caller, from: string, to: string, amount: number) {
+    return post(as, '/transfers', { idempotencyKey: randomUUID(), fromAccountId: from, toAccountId: to, amount })
+  }
+
+  it('refuses a void that would take cash below zero, until money comes back from the bank', async () => {
+    const receipt = await cashReceipt(asAccountant)
+    // Bank most of the cash, leaving Rs. 100 in the drawer.
+    expect((await move(asAccountant, school.cashId, school.bankId, (await balance(asAccountant, school.cashId)) - 10_000)).statusCode).toBe(200)
+    const asked = await post(asAccountant, '/void-requests', {
+      target: { type: 'payment', id: receipt.paymentId },
+      reason: 'wrong_student',
+      details: 'Wrong student.',
+    })
+    const request = voidRequestSchema.parse(asked.json())
+
+    expect(errorOf(await post(asAdmin, `/void-requests/${request.id}/approve`, {}))).toEqual({
+      status: 422,
+      code: 'INSUFFICIENT_CASH',
+      message: 'Cash in hand is Rs. 100. Move money from the bank to cash first, or void later.',
+    })
+    expect(await server.db.voidRecord.count({ where: { paymentId: receipt.paymentId } })).toBe(0)
+
+    // The way out: bring cash back from the bank, then approve.
+    expect((await move(asAccountant, school.bankId, school.cashId, 355_000)).statusCode).toBe(200)
+    expect((await post(asAdmin, `/void-requests/${request.id}/approve`, {})).statusCode).toBe(200)
+    expect(await balance(asAccountant, school.cashId)).toBe(10_000)
+  })
+
+  it('applies the same check to income and to direct voids, but never to an expense coming back', async () => {
+    const income = await saved(asAccountant, '/incomes', entry(categories.interest, school.cashId, 500, 'Sold old newspapers'))
+    const expense = await saved(asAccountant, '/expenses', entry(categories.stationery, school.cashId, 200))
+    expect((await move(asAccountant, school.cashId, school.bankId, await balance(asAccountant, school.cashId))).statusCode).toBe(200)
+
+    const direct = (target: object) => post(asAdmin, '/voids', { target, reason: 'other', details: 'Entered by mistake.' })
+    expect(errorOf(await direct({ type: 'income', id: income.id }))).toMatchObject({ status: 422, code: 'INSUFFICIENT_CASH' })
+    expect((await direct({ type: 'expense', id: expense.id })).statusCode).toBe(200)
+    expect(await balance(asAccountant, school.cashId)).toBe(20_000)
+  })
+
+  it('refuses to close a day while the cashbook shows less than nothing in cash', async () => {
+    const later = await onDay(1, 10, 2090)
+    try {
+      // Only entries made outside the app could do this; the server still answers clearly. The
+      // money comes back the next day, so cash overall never drops for the tests that follow.
+      const out = new Date(`${later.date}T00:00:00.000Z`)
+      const back = new Date(`${bsToAd({ year: 2090, month: 1, day: 11 })}T00:00:00.000Z`)
+      const amountPaisa = 100_000_000n
+      const fields = { accountId: school.cashId, amountPaisa, description: 'Entered outside the app', enteredById: accountant.id }
+      const expense = await later.other.db.expense.create({
+        data: { ...fields, idempotencyKey: randomUUID(), categoryId: categories.utilities, expenseDate: out },
+      })
+      const income = await later.other.db.income.create({
+        data: { ...fields, idempotencyKey: randomUUID(), categoryId: categories.interest, incomeDate: back },
+      })
+      await later.other.db.accountEntry.create({ data: { accountId: school.cashId, entryDate: out, direction: 'out', amountPaisa, expenseId: expense.id } })
+      await later.other.db.accountEntry.create({ data: { accountId: school.cashId, entryDate: back, direction: 'in', amountPaisa, incomeId: income.id } })
+
+      const status = dayCloseStatusSchema.parse((await get(later.accountant, `/day-closes/${later.date}`)).json())
+      expect(status.expectedCash).toBeLessThan(0)
+      const response = await post(later.accountant, '/day-closes', { counts: [{ note: 100, count: 1 }] })
+      expect(errorOf(response)).toMatchObject({ status: 422, code: 'CASH_BELOW_ZERO' })
+      expect(errorOf(response).message).toContain('less than nothing in cash')
+    } finally {
+      await later.other.close()
+    }
+  })
+
+  it('says which balances are below zero, and zero is not below zero', async () => {
+    const listed = async () => accountsResponseSchema.parse((await get(asAccountant, '/accounts')).json()).accounts
+    const bankListed = async () => (await listed()).find((account) => account.id === school.bankId)
+
+    // Whatever earlier tests left, spend from the bank until it is under zero, then bring it back to exactly zero.
+    const spend = Math.max(await balance(asAccountant, school.bankId), 0) + 100
+    await saved(asAccountant, '/expenses', { ...entry(categories.utilities, school.bankId, 1, 'Bigger than the bank balance'), amount: spend })
+    const under = await balance(asAccountant, school.bankId)
+    expect(under).toBeLessThan(0)
+    for (const account of await listed()) {
+      expect(account.belowZero).toBe(account.balance < 0)
+    }
+    expect(await bankListed()).toMatchObject({ belowZero: true })
+
+    await saved(asAccountant, '/incomes', { ...entry(categories.interest, school.bankId, 1, 'Bank brought back to zero'), amount: -under })
+    expect(await bankListed()).toMatchObject({ balance: 0, belowZero: false })
   })
 })
