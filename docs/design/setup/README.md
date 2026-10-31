@@ -1,6 +1,6 @@
 # Start-up and first-time setup screens
 
-PNG exports of the start-up and first-time setup screens.
+JPEG exports of the start-up and first-time setup screens. The Computer 1 images are 1× exports and will be replaced by 2× exports.
 
 - `computer-1/`: the school server (Super Admin's computer)
 - `computer-2/`: the accountant's computer

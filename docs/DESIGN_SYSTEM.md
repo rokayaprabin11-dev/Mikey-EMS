@@ -5,7 +5,7 @@ The approved UI designs are on two private design canvases (ask the project owne
 - Super Admin: https://claude.ai/artifact/TobcWYaaT9XBHE6ezwMdFj
 - Accountant: https://claude.ai/artifact/8PmVsHwPVRWYioRgzABN1m
 
-PDF exports of both canvases are in `docs/design/` (`super-admin.pdf`, `accountant.pdf`).
+Exports of the canvases are described in `docs/design/README.md`. PDF exports are kept locally, not in git.
 
 Match them. When a screen is not drawn, compose it from the patterns below instead of inventing a new look.
 

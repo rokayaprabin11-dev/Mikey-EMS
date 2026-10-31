@@ -4,3 +4,4 @@ release/
 *.log
 .env
 packages/db/src/generated/
+docs/design/*.pdf

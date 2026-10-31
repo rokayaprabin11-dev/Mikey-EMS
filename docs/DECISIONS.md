@@ -50,6 +50,11 @@ Agents: anything under **Open questions** is not decided. Do not build it, do no
 | Q16 | Is IRD approval of the billing software required for this school? | Receipt compliance |
 | Q17 | Payment methods actually used (cash, bank deposit, cheque, Fonepay, eSewa, Khalti)? | Method list |
 | Q18 | Free-seat scholarship quota tracking (Nepal requires a share of seats as free scholarships): needed in the app? | Scholarships |
+| Q19 | Should receipts say "Fees once paid are not refundable", and in what words? The security deposit is refundable by law. The line is left off until the school confirms. | Receipt footer |
+| Q20 | How are the cash and bank balances on the go-live day recorded? Proposed: one opening-balance ledger entry per account (cash and each bank), Super Admin only, dated the go-live day, permanent and audited, and allowed only while that account has no other entries. | Go-live |
+| Q21 | How are dues from before the app (arrears in the paper records) brought in? Likely an "opening dues" import per student, Super Admin only, audited. | Go-live |
+| Q22 | Files outside the database (logo, student photos) are not in the database dump. Proposed: a backup is one encrypted archive holding the dump and the uploads folder, and restore puts both back. | Backups, uploads |
+| Q23 | Is the annual fee prorated for students admitted mid-year? The designs showed "prorated from Kartik", but no rule was given. Until the school answers, new admissions get no annual fee. | Billing, Register student |
 
 ## Placeholders in the design and seed data
 
