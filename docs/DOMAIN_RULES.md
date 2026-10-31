@@ -65,8 +65,10 @@ Flow: find student → show unpaid dues oldest first → tick dues and set amoun
 - A line reads `<fee head>, <period>`, ending `(part)` when some of that due is left unpaid, and `(balance)` when it pays the rest of a due paid in part before. A fine shows its reason. "For the months of" names the months of the monthly dues paid, taken from their bill dates, and is left out when there are none.
 - The logo is the placeholder crest from the design until the uploaded logo is stored (Q9, Q22); the snapshot records it as `logo: null`.
 - The first print is the original, marked "Original", and it can be printed once (409 `ALREADY_PRINTED` after that). **[test]** A receipt with more lines than fit on one page continues on a second page that starts with the receipt number.
+- If the original was sent but the printer failed, the Super Admin (`payments.void`) can allow one more original for that receipt. The allowance needs a reason, is audited, and is a new `original_print_allowances` row, never an update; the next original print uses it up. Only one unused allowance can wait at a time (409 `ORIGINAL_ALREADY_ALLOWED`), and there is nothing to allow before the original has been printed (409 `ORIGINAL_NOT_PRINTED`). **[test]**
 - Default paper: A5 portrait *(setting; final printer unconfirmed)*.
-- Reprints are marked "Copy of original — print #N".
+- After the original, a receipt can be reprinted any number of times (`payments.reprint`). Each copy is a new `receipt_prints` row saying who printed it, on which computer and when, and is marked "Copy of original, print #N", where N is the print number. A copy before the original gets 409 `ORIGINAL_NOT_PRINTED`. Printing never changes the receipt. **[test]**
+- Any print made after a void carries a large "VOID" across the page. **[test]**
 
 ## 6. Voids and corrections
 
@@ -74,7 +76,10 @@ Flow: find student → show unpaid dues oldest first → tick dues and set amoun
 - To fix a mistake: void it. Void = a reversal record that references the original, with reason, user and time. Totals and cashbook exclude voided amounts but the cashbook shows both lines so the day still adds up.
 - Accountant can only **request** a void (reason required). Super Admin approves or declines with a note. Super Admin can void directly. **[test]** an Accountant calling the approve endpoint gets 403.
 - A void request says what went wrong (Wrong student, Wrong amount, Wrong payment method or Other) and always carries details for the Super Admin. **[test]**
-- Once voided, the due items it paid become unpaid again. **[test]**
+- A request changes no money. A receipt with a pending request gets 409 `VOID_ALREADY_REQUESTED`, and a voided one 409 `RECEIPT_ALREADY_VOIDED`; a declined request can be followed by a new one. **[test]**
+- Only the Super Admin (`payments.void`) decides. Declining needs a note. A Super Admin cannot approve a request they made themselves (403 `OWN_VOID_REQUEST`). **[test]**
+- Approving inserts a void and a reversing cash or bank entry on the payment's account, dated **today**, never an earlier day. The receipt keeps its number, the totals and the cashbook balance drop by the receipt amount, and the payment's status becomes voided. **[test]**
+- Once voided, the due items it paid become unpaid again, and so do the fines. **[test]**
 - A void cannot be voided. To redo, make a new payment.
 
 ## 7. Accounts

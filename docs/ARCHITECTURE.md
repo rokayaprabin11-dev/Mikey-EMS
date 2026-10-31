@@ -88,7 +88,8 @@ The allow list is extra protection only. Sign-in and permissions remain the real
 
 - Money writes run in a single Prisma interactive transaction (`SERIALIZABLE` not needed; use row locks).
 - The receipt counter row for the fiscal year is locked with `SELECT … FOR UPDATE` inside the payment transaction. The payment then locks the student's row; anything else that changes what a student owes (voids, discounts, fine waivers) locks that row too.
-- Printing the original locks the receipt row, so two counters printing at once cannot both get it.
+- Every print, copy or allowance for one more original locks the receipt row, so two counters printing at once cannot both get the original and copies are numbered one after the other.
+- A void request locks the payment row. Approving or declining locks the request row, so two decisions on one request cannot both pass; an approval then locks the student's row.
 - Idempotency: `payments.idempotency_key` is unique. On conflict, return the existing payment and receipt with HTTP 200.
 - Editable non-financial records (students, staff, settings, fee structure) carry an integer `version`. Updates send the version they read; mismatch → 409 `STALE_RECORD`, and the UI shows the "someone else changed this" state.
 
@@ -127,7 +128,7 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 - Receipts and report PDFs are generated on the server with PDFKit from the same data the screen shows, and returned as bytes. The desktop previews and prints them through the preload bridge.
 - A receipt PDF is drawn only from the receipt's snapshot (DOMAIN_RULES.md §5), at the sizes of the A5 receipt in the Accountant design. PDFs embed the desktop's fonts (IBM Plex Sans, Anek Latin) from the `@fontsource` WOFF files; fontkit cannot subset some glyphs from the WOFF2 files. Printed words live in `packages/shared/src/i18n/print.en.ts`.
 - Excel exports use ExcelJS on the server.
-- Reprints are stamped "Copy of original — print #N"; the server increments the count.
+- Copies are stamped "Copy of original, print #N"; the server gives each print the next number. Any print after a void carries a large "VOID".
 
 ## Local development
 

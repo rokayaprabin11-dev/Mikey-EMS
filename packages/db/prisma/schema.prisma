@@ -158,12 +158,12 @@ model User {
   updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   version      Int          @default(1)
 
-  role                      Role                   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  role                      Role                     @relation(fields: [roleId], references: [id], onDelete: Restrict)
   sessions                  Session[]
   paymentsTaken             Payment[]
   receiptPrints             ReceiptPrint[]
-  voidRequestsMade          VoidRequest[]          @relation("VoidRequestRequestedBy")
-  voidRequestsDecided       VoidRequest[]          @relation("VoidRequestDecidedBy")
+  voidRequestsMade          VoidRequest[]            @relation("VoidRequestRequestedBy")
+  voidRequestsDecided       VoidRequest[]            @relation("VoidRequestDecidedBy")
   voidsMade                 VoidRecord[]
   finesWaived               Fine[]
   incomesEntered            Income[]
@@ -173,8 +173,9 @@ model User {
   attendanceCorrections     AttendanceCorrection[]
   auditLogs                 AuditLog[]
   connectionRequestsDecided ConnectionRequest[]
-  computersAllowed          AllowedComputer[]      @relation("AllowedComputerAllowedBy")
-  computersRemoved          AllowedComputer[]      @relation("AllowedComputerRemovedBy")
+  computersAllowed          AllowedComputer[]        @relation("AllowedComputerAllowedBy")
+  originalPrintsAllowed     OriginalPrintAllowance[] @relation("OriginalPrintAllowedBy")
+  computersRemoved          AllowedComputer[]        @relation("AllowedComputerRemovedBy")
 
   @@map("users")
 }
@@ -482,8 +483,9 @@ model Receipt {
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
   createdBy         String?  @map("created_by") @db.Uuid
 
-  payment Payment        @relation(fields: [paymentId, amountPaisa], references: [id, amountPaisa], onDelete: Restrict)
-  prints  ReceiptPrint[]
+  payment    Payment                  @relation(fields: [paymentId, amountPaisa], references: [id, amountPaisa], onDelete: Restrict)
+  prints     ReceiptPrint[]
+  allowances OriginalPrintAllowance[]
 
   @@unique([paymentId, amountPaisa])
   @@unique([fiscalYear, seq])
@@ -499,6 +501,8 @@ model ReceiptCounter {
   @@map("receipt_counters")
 }
 
+// Print 1 is the original; every later print is a copy, except one that uses an allowance,
+// which is the extra original that allowance permitted.
 model ReceiptPrint {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   receiptId   String   @map("receipt_id") @db.Uuid
@@ -506,12 +510,31 @@ model ReceiptPrint {
   computer    Int      @db.SmallInt
   printedById String   @map("printed_by") @db.Uuid
   printedAt   DateTime @default(now()) @map("printed_at") @db.Timestamptz
+  allowanceId String?  @unique @map("allowance_id") @db.Uuid
 
-  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
-  printedBy User    @relation(fields: [printedById], references: [id], onDelete: Restrict)
+  receipt   Receipt                 @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  printedBy User                    @relation(fields: [printedById], references: [id], onDelete: Restrict)
+  allowance OriginalPrintAllowance? @relation(fields: [allowanceId], references: [id], onDelete: Restrict)
 
   @@unique([receiptId, printNo])
   @@map("receipt_prints")
+}
+
+// The Super Admin's permission for one more original print of a receipt, given with a reason
+// when the original was sent but the printer failed. Insert only.
+model OriginalPrintAllowance {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiptId   String   @map("receipt_id") @db.Uuid
+  reason      String
+  allowedById String   @map("allowed_by") @db.Uuid
+  allowedAt   DateTime @default(now()) @map("allowed_at") @db.Timestamptz
+
+  receipt   Receipt       @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  allowedBy User          @relation("OriginalPrintAllowedBy", fields: [allowedById], references: [id], onDelete: Restrict)
+  print     ReceiptPrint?
+
+  @@index([receiptId])
+  @@map("original_print_allowances")
 }
 
 model VoidRequest {

@@ -153,10 +153,13 @@ export const collectPaymentResponseSchema = z.object({
   alreadySaved: z.boolean(),
 })
 
+// `search` matches the receipt number, or the student's name or ID.
 export const paymentsListQuerySchema = z.object({
   date: adDateSchema,
   takenBy: z.enum(['me', 'everyone']).default('everyone'),
   search: z.string().trim().max(100).optional(),
+  method: paymentMethodSchema.optional(),
+  status: recordStatusSchema.optional(),
 })
 
 export const paymentListItemSchema = z.object({
@@ -170,6 +173,7 @@ export const paymentListItemSchema = z.object({
   amount: positivePaisaSchema,
 })
 
+// `total` leaves out voided receipts.
 export const paymentsListResponseSchema = z.object({
   payments: z.array(paymentListItemSchema),
   total: paisaSchema,
@@ -178,12 +182,23 @@ export const paymentsListResponseSchema = z.object({
 export const VOID_REASONS = ['wrong_student', 'wrong_amount', 'wrong_method', 'other'] as const
 export const voidReasonSchema = z.enum(VOID_REASONS)
 
-export const voidTargetTypeSchema = z.enum(['payment', 'income', 'expense'])
-
+// Voids of income and expenses come with step 4d; until then only a payment can be voided.
 export const voidRequestCreateSchema = z.object({
-  target: z.object({ type: voidTargetTypeSchema, id: idSchema }),
+  target: z.object({ type: z.literal('payment'), id: idSchema }),
   reason: voidReasonSchema,
   details: z.string().trim().min(1).max(500),
+})
+
+export const voidApprovalSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+})
+
+export const voidDeclineSchema = z.object({
+  note: z.string().trim().min(1).max(500),
+})
+
+export const originalPrintAllowanceSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
 })
 
 export const voidTargetSchema = z.discriminatedUnion('type', [
@@ -192,6 +207,10 @@ export const voidTargetSchema = z.discriminatedUnion('type', [
     id: idSchema,
     receiptNo: receiptNoSchema,
     studentName: z.string(),
+    className: z.string(),
+    sectionName: z.string(),
+    method: paymentMethodSchema,
+    takenAt: timestampSchema,
     amount: positivePaisaSchema,
   }),
   z.object({ type: z.literal('income'), id: idSchema, description: z.string(), amount: positivePaisaSchema }),
@@ -228,5 +247,8 @@ export type PaymentListItem = z.infer<typeof paymentListItemSchema>
 export type PaymentsListResponse = z.infer<typeof paymentsListResponseSchema>
 export type VoidReason = z.infer<typeof voidReasonSchema>
 export type VoidRequestCreate = z.infer<typeof voidRequestCreateSchema>
+export type VoidApproval = z.infer<typeof voidApprovalSchema>
+export type VoidDecline = z.infer<typeof voidDeclineSchema>
+export type OriginalPrintAllowance = z.infer<typeof originalPrintAllowanceSchema>
 export type VoidRequest = z.infer<typeof voidRequestSchema>
 export type VoidRequestsResponse = z.infer<typeof voidRequestsResponseSchema>

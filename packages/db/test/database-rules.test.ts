@@ -23,6 +23,7 @@ interface Fixture {
   allocationId: string
   receiptId: string
   receiptPrintId: string
+  allowanceId: string
   incomeCategoryId: string
   incomeId: string
   expenseCategoryId: string
@@ -102,6 +103,9 @@ beforeAll(async () => {
   const receiptPrint = await db.receiptPrint.create({
     data: { receiptId: receipt.id, printNo: 1, computer: 1, printedById: user.id },
   })
+  const allowance = await db.originalPrintAllowance.create({
+    data: { receiptId: receipt.id, reason: 'The printer jammed on the original.', allowedById: user.id },
+  })
   const incomeCategory = await db.incomeCategory.create({ data: { name: 'Bank interest' } })
   const income = await db.income.create({
     data: {
@@ -173,6 +177,7 @@ beforeAll(async () => {
     allocationId: allocation.id,
     receiptId: receipt.id,
     receiptPrintId: receiptPrint.id,
+    allowanceId: allowance.id,
     incomeCategoryId: incomeCategory.id,
     incomeId: income.id,
     expenseCategoryId: expenseCategory.id,
@@ -243,6 +248,7 @@ const permanentTables = [
   ['payment_allocations', () => f.allocationId],
   ['receipts', () => f.receiptId],
   ['receipt_prints', () => f.receiptPrintId],
+  ['original_print_allowances', () => f.allowanceId],
   ['voids', () => f.voidId],
   ['incomes', () => f.incomeId],
   ['expenses', () => f.expenseId],
@@ -362,6 +368,23 @@ describe('check constraints on money', () => {
         data: { ...receiptAmounts(90_000n), paymentId: payment.id, receiptNo: '2083/84-000021', fiscalYear: '2083/84', seq: 21 },
       }),
     ).rejects.toThrow(/Foreign key constraint/)
+  })
+
+  it('refuse an allowance for one more original without a reason', async () => {
+    await expect(
+      db.originalPrintAllowance.create({ data: { receiptId: f.receiptId, reason: '  ', allowedById: f.userId } }),
+    ).rejects.toThrow(/original_print_allowances_reason_check/)
+  })
+
+  it('refuse two prints that use the same allowance', async () => {
+    await db.receiptPrint.create({
+      data: { receiptId: f.receiptId, printNo: 2, computer: 2, printedById: f.userId, allowanceId: f.allowanceId },
+    })
+    await expect(
+      db.receiptPrint.create({
+        data: { receiptId: f.receiptId, printNo: 3, computer: 2, printedById: f.userId, allowanceId: f.allowanceId },
+      }),
+    ).rejects.toThrow(/Unique constraint/)
   })
 
   it('refuse a snapshot that is not an object', async () => {

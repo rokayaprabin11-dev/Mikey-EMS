@@ -12,6 +12,8 @@ export const printEn = {
   receipt: {
     title: 'Fee receipt',
     original: 'Original',
+    copy: (printNo: number) => `Copy of original, print #${printNo}`,
+    voided: 'VOID',
     phone: 'Phone',
     pan: 'PAN',
     receiptNo: 'Receipt no.',

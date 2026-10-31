@@ -42,14 +42,20 @@ const CREST = '#8C1D2F'
 const STAMP_RING = '#767676'
 const STAMP_TEXT = '#4A5560'
 const FOOTER_TEXT = '#3C4752'
+// The design system's `bad` colour: money out.
+const VOID_MARK = '#B42318'
 
 // The placeholder crest from the design, drawn in a 40 × 44 box.
 const CREST_SHIELD = 'M20 2 L37 8 V22 C37 32 29 39 20 42 C11 39 3 32 3 22 V8 Z'
 const CREST_LETTER = 'M11 30 V14 L20 24 L29 14 V30'
 
+// `copy` is the print number of a copy, or null for an original. A voided receipt is marked VOID
+// whenever it is printed after the void.
 export interface PrintDetails {
   printedAt: Date
   computer: 1 | 2
+  copy: number | null
+  voided: boolean
 }
 
 interface Run {
@@ -86,7 +92,7 @@ class ReceiptLayout {
     this.lines()
     this.totalsAndPayment()
     this.signatures()
-    this.footer()
+    this.endPage()
   }
 
   private use(font: FontName, size: number, colour = INK): void {
@@ -180,7 +186,8 @@ class ReceiptLayout {
     ]
       .filter((part) => part !== null)
       .join('   ')
-    const titleWidth = Math.max(this.widthOf(words.title, 'display', 18), this.widthOf(words.original, 'regular', 12))
+    const which = this.print.copy === null ? words.original : words.copy(this.print.copy)
+    const titleWidth = Math.max(this.widthOf(words.title, 'display', 18), this.widthOf(which, 'regular', 12))
     const textX = LEFT + CREST_WIDTH + 12
     const textWidth = RIGHT - titleWidth - 12 - textX
     const nameHeight = this.heightOf(school.name, 'display', 20, textWidth)
@@ -204,7 +211,7 @@ class ReceiptLayout {
     const titleY = this.y + (height - titleHeight) / 2
     this.use('display', 18)
     this.doc.text(words.title, pt(RIGHT - titleWidth), pt(titleY), { width: pt(titleWidth), align: 'right' })
-    this.line([{ text: words.original }], RIGHT - titleWidth, titleY + titleHeight - 12 * LINE_HEIGHT, 12, {
+    this.line([{ text: which }], RIGHT - titleWidth, titleY + titleHeight - 12 * LINE_HEIGHT, 12, {
       align: 'right',
       width: titleWidth,
     })
@@ -301,7 +308,7 @@ class ReceiptLayout {
 
   // A receipt that needs a second page carries its number at the top of it.
   private newPage(): void {
-    this.footer()
+    this.endPage()
     this.doc.addPage()
     this.y = TOP
     this.line([{ text: `${words.receiptNo} ` }, { text: this.snapshot.receiptNo, bold: true }], LEFT, this.y, 12)
@@ -422,7 +429,9 @@ class ReceiptLayout {
     })
   }
 
-  private footer(): void {
+  // Closes a page: the footer, and across a voided receipt a large VOID that leaves every line
+  // underneath readable.
+  private endPage(): void {
     const textY = FOOTER_TOP + 1 + 8
     this.rule(LEFT, RIGHT, FOOTER_TOP + 0.5, 1, RULE)
     this.line([{ text: words.keep }], LEFT, textY, 12, { colour: FOOTER_TEXT })
@@ -433,6 +442,17 @@ class ReceiptLayout {
       12,
       { align: 'right', width: WIDTH, colour: FOOTER_TEXT },
     )
+    if (this.print.voided) {
+      const size = 120
+      this.doc.save().rotate(-30, { origin: [pt(PAGE_WIDTH / 2), pt(PAGE_HEIGHT / 2)] }).fillOpacity(0.22)
+      this.use('display', size, VOID_MARK)
+      this.doc.text(words.voided, 0, pt(PAGE_HEIGHT / 2 - (size * LINE_HEIGHT) / 2), {
+        width: pt(PAGE_WIDTH),
+        align: 'center',
+        lineBreak: false,
+      })
+      this.doc.restore()
+    }
   }
 }
 

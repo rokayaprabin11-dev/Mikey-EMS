@@ -104,6 +104,23 @@ export const ERRORS = {
     status: 409,
     en: () => 'The original of this receipt has already been printed. Print a copy instead.',
   },
+  ORIGINAL_NOT_PRINTED: {
+    status: 409,
+    en: () => 'The original of this receipt has not been printed yet. Print the original first.',
+  },
+  ORIGINAL_ALREADY_ALLOWED: {
+    status: 409,
+    en: () => 'One more original print is already allowed for this receipt and has not been used yet.',
+  },
+  VOID_ALREADY_REQUESTED: {
+    status: 409,
+    en: () => "A void has already been asked for on this receipt. Wait for the Super Admin's answer.",
+  },
+  RECEIPT_ALREADY_VOIDED: { status: 409, en: () => 'This receipt has already been voided. Refresh the list.' },
+  OWN_VOID_REQUEST: {
+    status: 403,
+    en: () => 'You asked for this void yourself, so another Super Admin has to approve it.',
+  },
   INTERNAL_ERROR: {
     status: 500,
     en: () => 'Something went wrong on Computer 1. Try again. If it happens again, tell the Super Admin.',
