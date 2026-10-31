@@ -113,6 +113,7 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 
 - PostgreSQL 16 locally, in Docker for development only: `docker compose up -d` starts `postgres:16.15` on 127.0.0.1:5432 (`compose.yaml`). `DATABASE_URL` lives in `apps/server/.env` (never committed; `.env.example` is committed).
 - Copy `apps/server/.env.example` to `apps/server/.env`. `packages/db/prisma.config.ts` reads `DATABASE_URL` from that file.
+- `pnpm dev` first runs Electron's own installer. Electron 45 no longer downloads its runtime during `pnpm install`, so the first run after a fresh clone or reinstall downloads it (about 100 MB); later runs skip this.
 - If `ELECTRON_RUN_AS_NODE` is set in your shell (VS Code sets it for its extension processes), Electron starts as plain Node and the window never opens. Unset it before `pnpm dev`.
 - `pnpm build` on Linux needs wine for the NSIS installer step. On Windows it does not.
 - `pnpm db:migrate` applies migrations and regenerates the Prisma client.

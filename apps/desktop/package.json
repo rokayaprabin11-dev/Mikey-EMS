@@ -5,7 +5,7 @@
   "description": "Mikey EMS desktop app for the school office computers",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "install-electron && electron-vite dev",
     "build": "electron-vite build && electron-builder --win --x64",
     "typecheck": "tsc -b"
   },
