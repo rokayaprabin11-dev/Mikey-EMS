@@ -170,6 +170,7 @@ model User {
   expensesEntered           Expense[]
   transfersEntered          Transfer[]
   dayCloses                 DayClose[]
+  dayClosePrints            DayClosePrint[]
   attendanceCorrections     AttendanceCorrection[]
   auditLogs                 AuditLog[]
   connectionRequestsDecided ConnectionRequest[]
@@ -739,10 +740,28 @@ model DayClose {
   note              String?
   closedById        String   @map("closed_by") @db.Uuid
   closedAt          DateTime @default(now()) @map("closed_at") @db.Timestamptz
+  // Everything the day-close summary prints, taken at close (dayCloseSnapshotSchema in packages/shared).
+  snapshot          Json
 
-  closedBy User @relation(fields: [closedById], references: [id], onDelete: Restrict)
+  closedBy User            @relation(fields: [closedById], references: [id], onDelete: Restrict)
+  prints   DayClosePrint[]
 
   @@map("day_closes")
+}
+
+model DayClosePrint {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dayCloseId  String   @map("day_close_id") @db.Uuid
+  printNo     Int      @map("print_no")
+  computer    Int      @db.SmallInt
+  printedById String   @map("printed_by") @db.Uuid
+  printedAt   DateTime @default(now()) @map("printed_at") @db.Timestamptz
+
+  dayClose  DayClose @relation(fields: [dayCloseId], references: [id], onDelete: Restrict)
+  printedBy User     @relation(fields: [printedById], references: [id], onDelete: Restrict)
+
+  @@unique([dayCloseId, printNo])
+  @@map("day_close_prints")
 }
 
 // Attendance (the Accountant build only reads these)

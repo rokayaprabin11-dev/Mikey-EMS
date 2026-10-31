@@ -44,7 +44,7 @@ export const ERRORS = {
   NOT_FOUND: {
     status: 404,
     en: (params: {
-      what: 'address' | 'student' | 'due' | 'receipt' | 'request' | 'computer' | 'account' | 'category' | 'entry'
+      what: 'address' | 'student' | 'due' | 'receipt' | 'request' | 'computer' | 'account' | 'category' | 'entry' | 'dayClose'
     }) =>
       ({
         address: 'Computer 1 does not understand this request. Make sure both computers have the same version of Mikey EMS.',
@@ -56,6 +56,7 @@ export const ERRORS = {
         account: 'This cash or bank account was not found. Refresh and try again.',
         category: 'This category was not found. Refresh and try again.',
         entry: 'This income or expense was not found. Refresh the list and try again.',
+        dayClose: 'This day has not been closed yet, so there is no day-close summary to print.',
       })[params.what],
   },
   REQUEST_NOT_PENDING: {
@@ -103,7 +104,8 @@ export const ERRORS = {
   },
   SCHOOL_NOT_SET_UP: {
     status: 422,
-    en: () => 'The school name has not been saved on Computer 1 yet, so receipts cannot be made. Finish Computer 1 setup first.',
+    en: (params: { making: 'receipts' | 'day-close summaries' | 'reports' }) =>
+      `The school name has not been saved on Computer 1 yet, so ${params.making} cannot be made. Finish Computer 1 setup first.`,
   },
   ALREADY_PRINTED: {
     status: 409,

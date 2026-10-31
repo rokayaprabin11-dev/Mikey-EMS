@@ -92,6 +92,10 @@ export async function accountBook(db: Db, accountId: string, date: AdDate): Prom
     throw fail('NOT_FOUND', { what: 'account' })
   }
   const opening = await balanceOf(db, accountId, { before: date })
+  const closed =
+    account.kind === 'cash'
+      ? await db.dayClose.findUnique({ where: { closeDate: toDbDate(date) }, select: { closedAt: true } })
+      : null
   const rows = await db.accountEntry.findMany({
     where: { accountId, entryDate: toDbDate(date) },
     include: sources,
@@ -125,5 +129,10 @@ export async function accountBook(db: Db, accountId: string, date: AdDate): Prom
     entries,
     totals: { moneyIn: toPaisaNumber(moneyIn), moneyOut: toPaisaNumber(moneyOut) },
     closingBalance: toPaisaNumber(balance),
+    // Closing a day does not lock it (Q14), so the cashbook says what was entered after the count.
+    dayClose:
+      closed === null
+        ? null
+        : { closedAt: closed.closedAt.toISOString(), entriesAfter: rows.filter((row) => row.createdAt > closed.closedAt).length },
   }
 }

@@ -31,6 +31,8 @@ interface Fixture {
   voidId: string
   transferId: string
   entryId: string
+  dayCloseId: string
+  dayClosePrintId: string
   auditLogId: string
 }
 
@@ -163,6 +165,20 @@ beforeAll(async () => {
       paymentId: payment.id,
     },
   })
+  const dayClose = await db.dayClose.create({
+    data: {
+      closeDate: day('2026-10-27'),
+      expectedCashPaisa: 11_234_000n,
+      countedCashPaisa: 11_224_000n,
+      differencePaisa: -10_000n,
+      denominations: [],
+      closedById: user.id,
+      snapshot: {},
+    },
+  })
+  const dayClosePrint = await db.dayClosePrint.create({
+    data: { dayCloseId: dayClose.id, printNo: 1, computer: 2, printedById: user.id },
+  })
   const auditLog = await db.auditLog.create({
     data: { computer: 1, action: 'test.fixture', area: 'Tests', summary: 'Fixture rows for the database rules' },
   })
@@ -185,6 +201,8 @@ beforeAll(async () => {
     voidId: voidRecord.id,
     transferId: transfer.id,
     entryId: entry.id,
+    dayCloseId: dayClose.id,
+    dayClosePrintId: dayClosePrint.id,
     auditLogId: auditLog.id,
   }
 })
@@ -254,6 +272,8 @@ const permanentTables = [
   ['expenses', () => f.expenseId],
   ['transfers', () => f.transferId],
   ['account_entries', () => f.entryId],
+  ['day_closes', () => f.dayCloseId],
+  ['day_close_prints', () => f.dayClosePrintId],
   ['audit_logs', () => f.auditLogId],
 ] as const
 
@@ -413,9 +433,32 @@ describe('check constraints on money', () => {
           differencePaisa: 10_000n,
           denominations: [],
           closedById: f.userId,
+          snapshot: {},
         },
       }),
     ).rejects.toThrow(/day_closes_amounts_check/)
+  })
+
+  it('refuse a day-close snapshot that is not an object', async () => {
+    await expect(
+      db.dayClose.create({
+        data: {
+          closeDate: day('2026-10-26'),
+          expectedCashPaisa: 0n,
+          countedCashPaisa: 0n,
+          differencePaisa: 0n,
+          denominations: [],
+          closedById: f.userId,
+          snapshot: 'not an object',
+        },
+      }),
+    ).rejects.toThrow(/day_closes_snapshot_check/)
+  })
+
+  it('refuse a day-close print numbered zero', async () => {
+    await expect(
+      db.dayClosePrint.create({ data: { dayCloseId: f.dayCloseId, printNo: 0, computer: 1, printedById: f.userId } }),
+    ).rejects.toThrow(/day_close_prints_print_no_check/)
   })
 
   it('refuse a discount larger than the due', async () => {

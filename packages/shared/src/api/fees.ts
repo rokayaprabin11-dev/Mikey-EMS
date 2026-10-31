@@ -8,6 +8,8 @@ import {
   idSchema,
   paisaSchema,
   positivePaisaSchema,
+  printedDateSchema,
+  printedSchoolSchema,
   receiptNoSchema,
   recordStatusSchema,
   sessionNameSchema,
@@ -94,19 +96,12 @@ export const receiptLineSchema = z.object({
 export const receiptSnapshotSchema = z
   .object({
     version: z.literal(1),
-    school: z.object({
-      name: z.string().min(1),
-      address: z.string().nullable(),
-      phone: z.string().nullable(),
-      pan: z.string().nullable(),
-      // Receipts print the built-in placeholder crest until uploaded logos are stored (Q9, Q22).
-      logo: z.null(),
-    }),
+    school: printedSchoolSchema,
     receiptNo: receiptNoSchema,
     fiscalYear: fiscalYearSchema,
     sessionName: sessionNameSchema,
     issuedAt: timestampSchema,
-    date: z.object({ ad: adDateSchema, bs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+    date: printedDateSchema,
     student: z.object({
       code: z.string().min(1),
       fullName: z.string().min(1),

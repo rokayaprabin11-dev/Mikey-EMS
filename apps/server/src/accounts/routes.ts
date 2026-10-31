@@ -4,7 +4,7 @@ import type { AppDeps } from '../deps.ts'
 import { registerRoute } from '../http/route.ts'
 import { listAccounts } from './accounts.ts'
 import { accountBook } from './book.ts'
-import { closeDay, dayCloseStatus, listDayCloses } from './day-close.ts'
+import { closeDay, dayCloseStatus, listDayCloses, printDayCloseSummary } from './day-close.ts'
 import { createMoneyEntry, listCategories, listMoneyEntries } from './money-entries.ts'
 import { createTransfer } from './transfers.ts'
 
@@ -32,4 +32,6 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AppDeps): void
   registerRoute(app, deps, 'closeDay', (input) => closeDay(deps, input))
 
   registerRoute(app, deps, 'listDayCloses', () => listDayCloses(deps.db))
+
+  registerRoute(app, deps, 'printDayClose', (input) => printDayCloseSummary(deps, input))
 }

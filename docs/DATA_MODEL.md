@@ -9,7 +9,7 @@ Conventions:
 - Every table has `created_at timestamptz default now()` and `created_by` (user id, nullable for `system`). `created_by` is a plain id without a foreign key. Where a table names who created a row and when (`taken_by`, `entered_by`, `requested_by`/`requested_at`, `voided_by`/`voided_at`, `closed_by`/`closed_at`, `corrected_by`/`corrected_at`, `printed_by`/`printed_at`, `allowed_by`/`allowed_at`, `audit_logs.user_id`/`at`), those columns take the place of `created_by`/`created_at`, and the named user columns are foreign keys.
 - Money columns end in `_paisa` and are `bigint`. Business dates end in `_date` and are `date` (AD). Moments end in `_at` and are `timestamptz`. Times of day are `HH:MM` text (Kathmandu wall clock).
 - `computer` columns hold 1 or 2.
-- **Financial tables have no `updated_at` and no delete path.** Database triggers reject `UPDATE`, `DELETE` and `TRUNCATE` on `payments`, `payment_allocations`, `receipts`, `receipt_prints`, `original_print_allowances`, `voids`, `incomes`, `expenses`, `transfers`, `account_entries` and `audit_logs`. Editable tables have `updated_at` and an integer `version` for optimistic locking.
+- **Financial tables have no `updated_at` and no delete path.** Database triggers reject `UPDATE`, `DELETE` and `TRUNCATE` on `payments`, `payment_allocations`, `receipts`, `receipt_prints`, `original_print_allowances`, `voids`, `incomes`, `expenses`, `transfers`, `account_entries`, `day_closes`, `day_close_prints` and `audit_logs`. Editable tables have `updated_at` and an integer `version` for optimistic locking.
 - The status of a payment, income or expense is worked out, never stored: **voided** if a row in `voids` points at it, **void requested** if a `pending` row in `void_requests` points at it, otherwise **posted**.
 - A row that points at exactly one of several tables has one nullable foreign key per table and a `CHECK` that exactly one is set.
 - Every foreign key is `ON DELETE RESTRICT`.
@@ -68,7 +68,8 @@ Conventions:
 | `incomes` | idempotency_key (unique), category_id, account_id, income_date, amount_paisa, description, voucher_no?, entered_by | No status column |
 | `expenses` | idempotency_key (unique), category_id, account_id, expense_date, amount_paisa, description, voucher_no?, entered_by | No status column |
 | `transfers` | idempotency_key (unique), from_account_id, to_account_id, transfer_date, amount_paisa, note?, entered_by | The two accounts differ (`CHECK`) |
-| `day_closes` | close_date (unique), expected_cash_paisa, counted_cash_paisa, difference_paisa, denominations (jsonb), note?, closed_by, closed_at | `difference_paisa` is negative when the drawer is short |
+| `day_closes` | close_date (unique), expected_cash_paisa, counted_cash_paisa, difference_paisa, denominations (jsonb), note?, closed_by, closed_at, snapshot (jsonb) | `difference_paisa` is negative when the drawer is short. `snapshot` holds everything the day-close summary prints, taken at close and checked by `dayCloseSnapshotSchema` in packages/shared (version 1, read for ever, D22); the database checks it is an object. Permanent |
+| `day_close_prints` | day_close_id, print_no, computer, printed_by, printed_at | Unique (day_close_id, print_no). Print 1 is the original; every later print is a copy, marked "Copy of original, print #N". Permanent |
 
 ## Attendance and devices
 

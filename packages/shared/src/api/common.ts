@@ -36,6 +36,19 @@ export const bsMonthSchema = z.string().refine((value) => {
 export const recordStatusSchema = z.enum(['posted', 'void_requested', 'voided'])
 export type RecordStatus = z.infer<typeof recordStatusSchema>
 
+// The school as a printed document shows it, kept in the document's snapshot.
+export const printedSchoolSchema = z.object({
+  name: z.string().min(1),
+  address: z.string().nullable(),
+  phone: z.string().nullable(),
+  pan: z.string().nullable(),
+  // Documents print the built-in placeholder crest until uploaded logos are stored (Q9, Q22).
+  logo: z.null(),
+})
+
+// A day as a printed document shows it: the AD date and the same day in BS.
+export const printedDateSchema = z.object({ ad: adDateSchema, bs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
+
 export const studentRefSchema = z.object({
   id: idSchema,
   fullName: z.string(),

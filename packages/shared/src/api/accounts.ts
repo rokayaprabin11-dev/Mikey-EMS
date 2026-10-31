@@ -8,11 +8,13 @@ import {
   idSchema,
   paisaSchema,
   positivePaisaSchema,
+  printedDateSchema,
+  printedSchoolSchema,
   receiptNoSchema,
   recordStatusSchema,
   timestampSchema,
 } from './common.ts'
-import { voidReasonSchema } from './fees.ts'
+import { paymentMethodSchema, voidReasonSchema } from './fees.ts'
 
 export const accountKindSchema = z.enum(['cash', 'bank'])
 
@@ -97,6 +99,13 @@ export const transferSchema = z.object({
   createdAt: timestampSchema,
 })
 
+// What a void reverses, as the cashbook and the day-close summary name it.
+const voidTargetTextSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('payment'), receiptNo: receiptNoSchema }),
+  z.object({ type: z.literal('income'), description: z.string() }),
+  z.object({ type: z.literal('expense'), description: z.string() }),
+])
+
 const bookEntrySourceSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('payment'), paymentId: idSchema, receiptNo: receiptNoSchema, studentName: z.string() }),
   z.object({
@@ -124,11 +133,7 @@ const bookEntrySourceSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('void'),
     voidId: idSchema,
-    target: z.discriminatedUnion('type', [
-      z.object({ type: z.literal('payment'), receiptNo: receiptNoSchema }),
-      z.object({ type: z.literal('income'), description: z.string() }),
-      z.object({ type: z.literal('expense'), description: z.string() }),
-    ]),
+    target: voidTargetTextSchema,
     reason: voidReasonSchema,
     approvedBy: z.string(),
   }),
@@ -154,6 +159,8 @@ export const bookResponseSchema = z.object({
   entries: z.array(bookEntrySchema),
   totals: z.object({ moneyIn: paisaSchema, moneyOut: paisaSchema }),
   closingBalance: balanceSchema,
+  // On the cashbook of a closed day: when it was closed and how many entries were made after.
+  dayClose: z.object({ closedAt: timestampSchema, entriesAfter: countSchema }).nullable(),
 })
 
 export const CASH_DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 2] as const
@@ -195,6 +202,47 @@ export const dayClosesResponseSchema = z.object({
   dayCloses: z.array(dayCloseSchema),
 })
 
+const categoryTotalSchema = z.object({ name: z.string().min(1), amount: positivePaisaSchema })
+
+// Everything the day-close summary prints, taken when the day is closed. Every print is drawn from
+// it alone, and version 1 is read for ever, as with receipts (DECISIONS.md D22).
+export const dayCloseSnapshotSchema = z
+  .object({
+    version: z.literal(1),
+    school: printedSchoolSchema,
+    date: printedDateSchema,
+    closedAt: timestampSchema,
+    closedBy: z.string().min(1),
+    counts: z.array(noteCountSchema).min(1),
+    countedCash: paisaSchema,
+    expectedCash: paisaSchema,
+    difference: z.int(),
+    note: z.string().nullable(),
+    // The day's receipts, including any voided the same day; each void is listed under voids.
+    feesByMethod: z.array(
+      z.object({ method: paymentMethodSchema, receiptCount: z.int().positive(), amount: positivePaisaSchema }),
+    ),
+    incomeByCategory: z.array(categoryTotalSchema),
+    expensesByCategory: z.array(categoryTotalSchema),
+    voids: z.array(
+      z.object({
+        target: voidTargetTextSchema,
+        accountName: z.string().min(1),
+        amount: positivePaisaSchema,
+        reason: voidReasonSchema,
+        voidedBy: z.string().min(1),
+      }),
+    ),
+  })
+  .refine(
+    (snapshot) => snapshot.countedCash === snapshot.counts.reduce((sum, item) => sum + item.note * 100 * item.count, 0),
+    { error: 'The counted notes do not add up to the counted cash.', path: ['countedCash'] },
+  )
+  .refine((snapshot) => snapshot.difference === snapshot.countedCash - snapshot.expectedCash, {
+    error: 'The difference is not the counted cash minus the expected cash.',
+    path: ['difference'],
+  })
+
 export type AccountKind = z.infer<typeof accountKindSchema>
 export type Account = z.infer<typeof accountSchema>
 export type AccountsResponse = z.infer<typeof accountsResponseSchema>
@@ -210,3 +258,4 @@ export type DayCloseCreate = z.infer<typeof dayCloseCreateSchema>
 export type DayClose = z.infer<typeof dayCloseSchema>
 export type DayCloseStatus = z.infer<typeof dayCloseStatusSchema>
 export type DayClosesResponse = z.infer<typeof dayClosesResponseSchema>
+export type DayCloseSnapshot = z.infer<typeof dayCloseSnapshotSchema>

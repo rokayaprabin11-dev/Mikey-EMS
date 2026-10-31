@@ -88,7 +88,7 @@ The allow list is extra protection only. Sign-in and permissions remain the real
 
 - Money writes run in a single Prisma interactive transaction (`SERIALIZABLE` not needed; use row locks).
 - The receipt counter row for the fiscal year is locked with `SELECT … FOR UPDATE` inside the payment transaction. The payment then locks the student's row; anything else that changes what a student owes (voids, discounts, fine waivers) locks that row too.
-- Every print, copy or allowance for one more original locks the receipt row, so two counters printing at once cannot both get the original and copies are numbered one after the other.
+- Every print, copy or allowance for one more original locks the receipt row, so two counters printing at once cannot both get the original and copies are numbered one after the other. Every print of a day-close summary locks that day's close the same way.
 - A void request locks the payment, income or expense row. Approving or declining takes its locks in one order: the payment, income or expense row, then the request row (so two decisions on one request cannot both pass), then the student's row for a receipt, then the account the money moves on. A direct void takes the same locks in the same order.
 - Anything that takes money out of an account (an expense, a transfer, a void, a day close) locks the account row first. A transfer locks both of its accounts in the same order every time, so two transfers going opposite ways cannot wait on each other.
 - Idempotency: `payments.idempotency_key` is unique. On conflict, return the existing payment and receipt with HTTP 200.
@@ -127,7 +127,7 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 ## Printing and exports
 
 - Receipts and report PDFs are generated on the server with PDFKit from the same data the screen shows, and returned as bytes. The desktop previews and prints them through the preload bridge.
-- A receipt PDF is drawn only from the receipt's snapshot (DOMAIN_RULES.md §5), at the sizes of the A5 receipt in the Accountant design. PDFs embed the desktop's fonts (IBM Plex Sans, Anek Latin) from the `@fontsource` WOFF files; fontkit cannot subset some glyphs from the WOFF2 files. Printed words live in `packages/shared/src/i18n/print.en.ts`.
+- A receipt PDF is drawn only from the receipt's snapshot (DOMAIN_RULES.md §5), at the sizes of the A5 receipt in the Accountant design. The day-close summary is drawn the same way from the close's snapshot (§7), on the same A5 page (`pdf/a5.ts`). PDFs embed the desktop's fonts (IBM Plex Sans, Anek Latin) from the `@fontsource` WOFF files; fontkit cannot subset some glyphs from the WOFF2 files. Printed words live in `packages/shared/src/i18n/print.en.ts`.
 - Excel exports use ExcelJS on the server.
 - Copies are stamped "Copy of original, print #N"; the server gives each print the next number. Any print after a void carries a large "VOID".
 

@@ -8,14 +8,19 @@ import {
   categoriesResponseSchema,
   collectPaymentResponseSchema,
   dayCloseSchema,
+  dayCloseSnapshotSchema,
   dayClosesResponseSchema,
   dayCloseStatusSchema,
+  formatKathmanduTime,
+  formatReceiptAmount,
   moneyEntryListResponseSchema,
   moneyEntrySchema,
+  printEn,
   transferSchema,
   voidRequestSchema,
 } from '@mikey/shared'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import PDFDocument from 'pdfkit'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   addDue,
@@ -415,6 +420,192 @@ describe('day close', () => {
       { note: 100, count: 2 },
     ]
     expect(errorOf(await post(asAccountant, '/day-closes', { counts: twice }))).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' })
+  })
+})
+
+// @types/pdfkit types the default export as a document rather than a class with a prototype.
+const pdfDocument = (PDFDocument as unknown as { prototype: PDFKit.PDFDocument }).prototype
+
+// Prints a day's summary and collects every piece of text drawn on it.
+async function summary(as: Caller, date: string) {
+  const text = vi.spyOn(pdfDocument, 'text')
+  try {
+    const response = await post(as, `/day-closes/${date}/print`)
+    return { response, text: text.mock.calls.map(([value]) => String(value)).join('') }
+  } finally {
+    text.mockRestore()
+  }
+}
+
+describe('the day-close summary', () => {
+  it("prints the count, the day's money by method and by category, and the day's voids, from the snapshot saved at close", async () => {
+    const day = await onDay(8, 15)
+    try {
+      const { accountant: counter, admin: office, other, date } = day
+      const student = await createStudent(other.db, school, 'Sujata Tamang')
+      const kartik = await addDue(other.db, school, student.id, { month: 7, rupees: 3550 })
+      const mangsir = await addDue(other.db, school, student.id, { month: 8, rupees: 3550 })
+      const pay = (feeDueId: string, method: object) =>
+        post(counter, '/payments', {
+          idempotencyKey: randomUUID(),
+          studentId: student.id,
+          ...method,
+          allocations: [{ kind: 'fee', feeDueId, amount: 355_000 }],
+        })
+      expect((await pay(kartik.id, { method: 'cash' })).statusCode).toBe(200)
+      other.advanceMinutes(1)
+      expect((await pay(mangsir.id, { method: 'fonepay', reference: 'FP-2231' })).statusCode).toBe(200)
+      other.advanceMinutes(1)
+      await saved(counter, '/incomes', entry(categories.interest, school.cashId, 1000, 'Old furniture sold'))
+      other.advanceMinutes(1)
+      await saved(counter, '/expenses', entry(categories.stationery, school.cashId, 450))
+      other.advanceMinutes(1)
+      const typedTwice = await saved(counter, '/expenses', entry(categories.utilities, school.cashId, 260, 'Typed twice'))
+      other.advanceMinutes(1)
+      await approveVoid({ type: 'expense', id: typedTwice.id }, counter, office)
+      other.advanceMinutes(1)
+
+      const { expectedCash } = dayCloseStatusSchema.parse((await get(counter, `/day-closes/${date}`)).json())
+      const closed = await post(counter, '/day-closes', {
+        counts: [
+          { note: 100, count: 3 },
+          { note: 1000, count: 1 },
+        ],
+        note: 'One note was torn.',
+      })
+      expect(closed.statusCode, closed.body).toBe(200)
+      const row = await other.db.dayClose.findUniqueOrThrow({ where: { id: dayCloseSchema.parse(closed.json()).id } })
+      expect(dayCloseSnapshotSchema.parse(row.snapshot)).toMatchObject({
+        version: 1,
+        date: { ad: date, bs: '2083-08-15' },
+        closedBy: 'Test Accountant',
+        counts: [
+          { note: 1000, count: 1 },
+          { note: 100, count: 3 },
+        ],
+        countedCash: 130_000,
+        expectedCash,
+        difference: 130_000 - expectedCash,
+        note: 'One note was torn.',
+        feesByMethod: [
+          { method: 'cash', receiptCount: 1, amount: 355_000 },
+          { method: 'fonepay', receiptCount: 1, amount: 355_000 },
+        ],
+        incomeByCategory: [{ name: 'Bank interest', amount: 100_000 }],
+        expensesByCategory: [
+          { name: 'Stationery and teaching', amount: 45_000 },
+          { name: 'Utilities', amount: 26_000 },
+        ],
+        voids: [
+          {
+            target: { type: 'expense', description: 'Typed twice' },
+            accountName: 'Cash in hand',
+            amount: 26_000,
+            reason: 'wrong_amount',
+            voidedBy: 'Test Super Admin',
+          },
+        ],
+      })
+
+      const original = await summary(counter, date)
+      expect(original.response.statusCode).toBe(200)
+      expect(original.response.headers['content-type']).toBe('application/pdf')
+      for (const text of [
+        'Mikey English Medium School',
+        'Day close summary',
+        'Original',
+        '15 Mangsir 2083',
+        'Test Accountant',
+        'Rs. 1,000',
+        'Counted',
+        '1,300.00',
+        'Cashbook says',
+        formatReceiptAmount(expectedCash),
+        130_000 < expectedCash ? 'Short' : 'Over',
+        formatReceiptAmount(Math.abs(130_000 - expectedCash)),
+        'One note was torn.',
+        'Fonepay QR',
+        '7,100.00',
+        'Bank interest',
+        'Stationery and teaching',
+        'Utilities',
+        'Void of expense: Typed twice. Wrong amount, voided by Test Super Admin.',
+        'Cash in hand',
+      ]) {
+        expect(original.text).toContain(text)
+      }
+      const copy = await summary(counter, date)
+      expect(copy.text).toContain('Copy of original, print #2')
+      expect(copy.text).not.toContain('Original')
+      expect(await other.db.dayClosePrint.findMany({ where: { dayCloseId: row.id }, orderBy: { printNo: 'asc' }, select: { printNo: true, computer: true } })).toEqual([
+        { printNo: 1, computer: 2 },
+        { printNo: 2, computer: 2 },
+      ])
+    } finally {
+      await day.other.close()
+    }
+  })
+
+  it('the day-close summary reprint is unchanged after an entry is added following the close', async () => {
+    const day = await onDay(8, 16)
+    try {
+      const { accountant: counter, other, date } = day
+      await saved(counter, '/incomes', entry(categories.interest, school.cashId, 500, 'Cash brought in for the test'))
+      other.advanceMinutes(1)
+      const closed = dayCloseSchema.parse((await post(counter, '/day-closes', { counts: [{ note: 500, count: 1 }] })).json())
+      const original = await summary(counter, date)
+      const originalAt = other.now()
+
+      other.advanceMinutes(10)
+      await saved(counter, '/expenses', entry(categories.stationery, school.cashId, 120, 'Chalk bought after the count'))
+      const reprint = await summary(counter, date)
+      expect(reprint.response.statusCode).toBe(200)
+
+      // Only the print's own details differ: which print it is, and when it was printed.
+      const printed = (at: Date) => printEn.document.printed(formatKathmanduTime(at), 2)
+      expect(reprint.text).toContain('Copy of original, print #2')
+      expect(
+        reprint.text.replace('Copy of original, print #2', 'Original').replaceAll(printed(other.now()), printed(originalAt)),
+      ).toBe(original.text)
+      expect(reprint.text).not.toContain('Chalk bought after the count')
+
+      // The cashbook says what was entered after the count; the bankbook has no count.
+      const book = bookResponseSchema.parse((await get(counter, `/accounts/${school.cashId}/book?date=${date}`)).json())
+      expect(book.dayClose).toEqual({ closedAt: closed.closedAt, entriesAfter: 1 })
+      const bankBook = bookResponseSchema.parse((await get(counter, `/accounts/${school.bankId}/book?date=${date}`)).json())
+      expect(bankBook.dayClose).toBeNull()
+    } finally {
+      await day.other.close()
+    }
+  })
+
+  it('numbers the prints one after another when several are printed at once', async () => {
+    const day = await onDay(8, 17)
+    try {
+      const { accountant: counter, other, date } = day
+      await saved(counter, '/incomes', entry(categories.interest, school.cashId, 500, 'Cash brought in for the test'))
+      expect((await post(counter, '/day-closes', { counts: [{ note: 500, count: 1 }] })).statusCode).toBe(200)
+      const prints = await Promise.all(Array.from({ length: 5 }, () => post(counter, `/day-closes/${date}/print`)))
+      expect(prints.map((response) => response.statusCode)).toEqual([200, 200, 200, 200, 200])
+      const rows = await other.db.dayClosePrint.findMany({
+        where: { dayClose: { closeDate: new Date(`${date}T00:00:00.000Z`) } },
+        select: { printNo: true },
+      })
+      expect(rows.map((print) => print.printNo).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5])
+    } finally {
+      await day.other.close()
+    }
+  })
+
+  it('says there is no summary for a day that has not been closed, and shows no count on its cashbook', async () => {
+    const notClosed = bsToAd({ year: 2083, month: 8, day: 20 })
+    expect(errorOf(await post(asAccountant, `/day-closes/${notClosed}/print`))).toEqual({
+      status: 404,
+      code: 'NOT_FOUND',
+      message: 'This day has not been closed yet, so there is no day-close summary to print.',
+    })
+    const book = bookResponseSchema.parse((await get(asAccountant, `/accounts/${school.cashId}/book?date=${notClosed}`)).json())
+    expect(book.dayClose).toBeNull()
   })
 })
 

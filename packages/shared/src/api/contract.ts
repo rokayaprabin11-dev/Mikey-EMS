@@ -317,6 +317,13 @@ export const endpoints = {
     access: 'accounts.dayClose',
     response: dayClosesResponseSchema,
   },
+  printDayClose: {
+    method: 'POST',
+    path: '/day-closes/:date/print',
+    access: 'accounts.dayClose',
+    params: dateParams,
+    response: 'pdf',
+  },
 
   report: { method: 'GET', path: '/reports', access: 'reports.finance', query: reportQuerySchema, response: reportSchema },
   reportPdf: { method: 'GET', path: '/reports/pdf', access: 'reports.finance', query: reportQuerySchema, response: 'pdf' },

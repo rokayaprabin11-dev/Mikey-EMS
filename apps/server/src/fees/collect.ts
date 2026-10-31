@@ -121,7 +121,7 @@ export async function collectPayment(deps: AppDeps, input: CollectInput): Promis
     const accountId = await receivingAccount(tx, body.method)
     const school = await readSetting(tx, 'school.profile', schoolProfileSchema)
     if (school === null) {
-      throw fail('SCHOOL_NOT_SET_UP')
+      throw fail('SCHOOL_NOT_SET_UP', { making: 'receipts' })
     }
     // One table per query, one query after another (CLAUDE.md).
     const student = await tx.student.findUniqueOrThrow({
