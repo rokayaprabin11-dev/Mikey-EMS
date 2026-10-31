@@ -32,6 +32,7 @@ Computer 1 (Super Admin, server)                     Computer 2 (Accountant)
 - Fastify, TypeScript, Prisma. Routes under `/api/v1`. JSON only.
 - The server and `packages/shared` run as TypeScript directly on Node 24 (type stripping). Relative imports end in `.ts`, type-only imports use `import type`, and enums and namespaces are not allowed (`erasableSyntaxOnly`).
 - Every route declares a Zod schema for params, query, body and response (from `packages/shared`).
+- Every endpoint (method, path under `/api/v1`, permission and schemas) is listed once in `packages/shared/src/api/contract.ts`. The server and the desktop API client both use that list.
 - Every route except `POST /auth/login` and `GET /health` requires a session and a permission key.
 - Errors use one shape:
   ```json
@@ -49,7 +50,7 @@ Computer 1 (Super Admin, server)                     Computer 2 (Accountant)
 
 ### Health and connection status
 
-- `GET /health` returns `{ server: "ok", db: "ok"|"down", device: "connected"|"not_responding"|"none", cloudBackup: "uploaded"|"waiting"|"failed", time }`.
+- `GET /health` returns `{ server: "ok", db: "ok"|"down", device: "connected"|"not_responding"|"none", cloudBackup: "uploaded"|"waiting"|"failed"|"not_set_up", allowed: true|false, time }`. `allowed` says whether the calling computer is on the allowed list.
 - The desktop app polls it every 5 seconds. Do **not** use `navigator.onLine` (it says "online" whenever any network exists).
 - After 2 failed polls: show "Reconnecting". After 15 seconds: Computer 2 shows the blocking "Can't reach Computer 1" screen. Any form that was mid-submit shows "not saved". Never queue money writes on the client.
 

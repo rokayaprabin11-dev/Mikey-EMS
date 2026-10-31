@@ -1,0 +1,50 @@
+import { z } from 'zod'
+
+import { FIRST_BS_YEAR, LAST_BS_YEAR } from '../date.ts'
+
+export const idSchema = z.uuid()
+export const idempotencyKeySchema = z.uuid()
+export const adDateSchema = z.iso.date()
+export const timestampSchema = z.iso.datetime({ offset: true })
+export const paisaSchema = z.int().nonnegative()
+export const positivePaisaSchema = z.int().positive()
+export const countSchema = z.int().nonnegative()
+
+export const receiptNoSchema = z.string().regex(/^\d{4}\/\d{2}-\d{6}$/)
+export const sessionNameSchema = z.string().regex(/^\d{4}$/)
+
+const FISCAL_YEAR_PATTERN = /^(\d{4})\/(\d{2})$/
+export const fiscalYearSchema = z.string().refine((value) => {
+  const match = FISCAL_YEAR_PATTERN.exec(value)
+  return match !== null && (Number(match[1]) + 1) % 100 === Number(match[2])
+}, 'A fiscal year looks like 2083/84.')
+
+const BS_MONTH_PATTERN = /^(\d{4})-(\d{2})$/
+export const bsMonthSchema = z.string().refine((value) => {
+  const match = BS_MONTH_PATTERN.exec(value)
+  if (match === null) {
+    return false
+  }
+  const year = Number(match[1])
+  const month = Number(match[2])
+  return year >= FIRST_BS_YEAR && year <= LAST_BS_YEAR && month >= 1 && month <= 12
+}, 'A BS month looks like 2083-07.')
+
+export const recordStatusSchema = z.enum(['posted', 'void_requested', 'voided'])
+
+export const studentRefSchema = z.object({
+  id: idSchema,
+  fullName: z.string(),
+  className: z.string(),
+  sectionName: z.string(),
+})
+
+export const errorBodySchema = z.object({
+  error: z.object({
+    code: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
+    message: z.string(),
+    details: z.record(z.string(), z.unknown()),
+  }),
+})
+
+export type ErrorBody = z.infer<typeof errorBodySchema>
