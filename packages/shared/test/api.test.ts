@@ -5,7 +5,7 @@ import { bsMonthSchema, errorBodySchema } from '../src/api/common.ts'
 import { endpoints } from '../src/api/contract.ts'
 import { collectPaymentRequestSchema, PAYMENT_METHODS, voidRequestCreateSchema } from '../src/api/fees.ts'
 import { reportQuerySchema } from '../src/api/reports.ts'
-import { healthResponseSchema } from '../src/api/system.ts'
+import { connectionRequestCreateSchema, healthResponseSchema } from '../src/api/system.ts'
 import { PERMISSION_KEYS } from '../src/permissions.ts'
 
 const ids = {
@@ -142,17 +142,39 @@ describe('report filters', () => {
 })
 
 describe('health check', () => {
+  const health = {
+    server: 'ok',
+    db: 'ok',
+    device: 'none',
+    cloudBackup: 'not_set_up',
+    allowed: false,
+    time: '2026-10-31T04:15:12.000Z',
+    serverName: 'MIKEY-SERVER',
+    schoolName: 'Mikey English Medium School',
+  }
+
   it('reports whether this computer is allowed', () => {
-    const health = {
-      server: 'ok',
-      db: 'ok',
-      device: 'none',
-      cloudBackup: 'not_set_up',
-      allowed: false,
-      time: '2026-10-31T04:15:12.000Z',
-    }
     expect(healthResponseSchema.safeParse(health).success).toBe(true)
     expect(healthResponseSchema.safeParse({ ...health, allowed: undefined }).success).toBe(false)
+  })
+
+  it('names the server, and the school once Computer 1 setup has saved it', () => {
+    expect(healthResponseSchema.safeParse({ ...health, schoolName: null }).success).toBe(true)
+    expect(healthResponseSchema.safeParse({ ...health, serverName: undefined }).success).toBe(false)
+  })
+})
+
+describe('asking to connect', () => {
+  it('sends the computer name, and repeats never ask again unless told to', () => {
+    expect(connectionRequestCreateSchema.safeParse({ computerName: ' ACCOUNTS-PC ' }).data).toEqual({
+      computerName: 'ACCOUNTS-PC',
+      askAgain: false,
+    })
+    expect(connectionRequestCreateSchema.safeParse({ computerName: 'ACCOUNTS-PC', askAgain: true }).data).toEqual({
+      computerName: 'ACCOUNTS-PC',
+      askAgain: true,
+    })
+    expect(connectionRequestCreateSchema.safeParse({ computerName: '' }).success).toBe(false)
   })
 })
 
@@ -172,15 +194,23 @@ describe('API contract', () => {
     expect(new Set(routes).size).toBe(routes.length)
   })
 
-  it('names a real permission, or says the route is public or for anyone signed in', () => {
-    const allowed = new Set<string>([...PERMISSION_KEYS, 'public', 'signed_in'])
+  const noSession = new Set<string>(['anyone', 'local_network', 'allowed_computer'])
+
+  it('names a real permission or one of the access levels', () => {
+    const allowed = new Set<string>([...PERMISSION_KEYS, ...noSession, 'signed_in'])
     for (const endpoint of list) {
       expect(allowed.has(endpoint.access)).toBe(true)
     }
   })
 
-  it('leaves only the health check and sign-in open without a session', () => {
-    const open = list.filter((endpoint) => endpoint.access === 'public').map((endpoint) => endpoint.path)
-    expect(open.sort()).toEqual(['/auth/login', '/health'])
+  it('lets only health, connection requests and sign-in work without a session', () => {
+    const open = list
+      .filter((endpoint) => noSession.has(endpoint.access))
+      .map((endpoint) => `${endpoint.access} ${endpoint.method} ${endpoint.path}`)
+    expect(open.sort()).toEqual([
+      'allowed_computer POST /auth/login',
+      'anyone GET /health',
+      'local_network POST /connection-requests',
+    ])
   })
 })

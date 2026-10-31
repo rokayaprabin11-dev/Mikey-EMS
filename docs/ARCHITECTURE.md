@@ -17,7 +17,7 @@ Computer 1 (Super Admin, server)                     Computer 2 (Accountant)
 
 - The **server runs as a Windows service**, not inside Electron. Closing the Super Admin window must not stop Computer 2. The installer for Computer 1 installs the service; the installer for Computer 2 does not.
 - **One desktop build** for both computers. On first run the user picks "This computer is the server" (URL `http://127.0.0.1:3100`) or enters the server address. The URL is stored by the Electron main process.
-- **Only the server touches PostgreSQL.** PostgreSQL binds to `127.0.0.1`. The API port is allowed through Windows Firewall only from the Accountant computer's IP (set in Settings → Office network).
+- **Only the server touches PostgreSQL.** PostgreSQL binds to `127.0.0.1`. Which other computers may use the API is set by the allow list (see Allowed computers).
 
 ## Desktop app (`apps/desktop`)
 
@@ -33,7 +33,7 @@ Computer 1 (Super Admin, server)                     Computer 2 (Accountant)
 - The server and `packages/shared` run as TypeScript directly on Node 24 (type stripping). Relative imports end in `.ts`, type-only imports use `import type`, and enums and namespaces are not allowed (`erasableSyntaxOnly`).
 - Every route declares a Zod schema for params, query, body and response (from `packages/shared`).
 - Every endpoint (method, path under `/api/v1`, permission and schemas) is listed once in `packages/shared/src/api/contract.ts`. The server and the desktop API client both use that list.
-- Every route except `POST /auth/login` and `GET /health` requires a session and a permission key.
+- Every route requires a session and a permission key except `GET /health` (anyone), `POST /connection-requests` (no session, local subnet only) and `POST /auth/login` (no session). Every route except the first two refuses computers that are not on the allow list with 403 `NOT_ALLOWED`. Each endpoint's `access` in `contract.ts` says which rule applies.
 - Errors use one shape:
   ```json
   { "error": { "code": "RECEIPT_ALREADY_VOIDED", "message": "This receipt was already voided at 10:12 AM.", "details": {} } }
@@ -50,9 +50,21 @@ Computer 1 (Super Admin, server)                     Computer 2 (Accountant)
 
 ### Health and connection status
 
-- `GET /health` returns `{ server: "ok", db: "ok"|"down", device: "connected"|"not_responding"|"none", cloudBackup: "uploaded"|"waiting"|"failed"|"not_set_up", allowed: true|false, time }`. `allowed` says whether the calling computer is on the allowed list.
+- `GET /health` returns `{ server: "ok", db: "ok"|"down", device: "connected"|"not_responding"|"none", cloudBackup: "uploaded"|"waiting"|"failed"|"not_set_up", allowed: true|false, time, serverName, schoolName }`. `allowed` says whether the calling computer is on the allow list. `serverName` is this computer's Windows name; `schoolName` comes from the school profile and is empty until Computer 1 setup saves it. Nothing more: no version, no counts, no user data.
 - The desktop app polls it every 5 seconds. Do **not** use `navigator.onLine` (it says "online" whenever any network exists).
 - After 2 failed polls: show "Reconnecting". After 15 seconds: Computer 2 shows the blocking "Can't reach Computer 1" screen. Any form that was mid-submit shows "not saved". Never queue money writes on the client.
+
+### Allowed computers
+
+The allow list is extra protection only. Sign-in and permissions remain the real security.
+
+- Windows Firewall: the Computer 1 installer creates one rule that opens port 3100 to the local subnet only, never to "any". There are no per-computer rules, so the server never needs admin rights while it runs.
+- The server's allow list does the gating: every route except `/health` and `/connection-requests` refuses a computer that is not on it (403 `NOT_ALLOWED`). `127.0.0.1` is always allowed, so Computer 1 can reach itself.
+- Computer 2 asks to connect with `POST /api/v1/connection-requests { computerName, askAgain }`. It needs no session, but the server accepts it only from its own local subnet. The server records the caller's IP as it sees it, plus the computer name, and replies with that IP and the request's status (`pending`, `allowed` or `declined`).
+- Limits: 1 request per minute per IP, at most 10 pending requests, and pending requests expire after 24 hours. A repeat from the same IP refreshes its pending request instead of adding another.
+- Computer 2's "Get allowed" screen sends the request, repeats it once a minute while it is pending, and polls `/health` every 5 seconds until `allowed` is true. Repeats never reopen a declined request: the screen shows "Declined" with an "Ask again" button, which sends a fresh request (`askAgain: true`).
+- Computer 1 lists pending requests in setup step 5 and in Settings → Office network, each with Allow / Not this one, plus "Add a computer by IP address" as a manual fallback. Allowing adds the IP to `allowed_computers`, declining marks the request declined, and removing sets `removed_at`. Each writes an audit row.
+- Give both computers a fixed IP address or a DHCP reservation on the office router. If Computer 2's address changes, it simply asks again.
 
 ### Concurrency
 
@@ -99,11 +111,14 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 
 ## Local development
 
-- PostgreSQL 16 locally (Docker allowed for dev only). `DATABASE_URL` in `apps/server/.env` (never committed; `.env.example` is committed).
+- PostgreSQL 16 locally, in Docker for development only: `docker compose up -d` starts `postgres:16.15` on 127.0.0.1:5432 (`compose.yaml`). `DATABASE_URL` lives in `apps/server/.env` (never committed; `.env.example` is committed).
 - Copy `apps/server/.env.example` to `apps/server/.env`. `packages/db/prisma.config.ts` reads `DATABASE_URL` from that file.
 - If `ELECTRON_RUN_AS_NODE` is set in your shell (VS Code sets it for its extension processes), Electron starts as plain Node and the window never opens. Unset it before `pnpm dev`.
 - `pnpm build` on Linux needs wine for the NSIS installer step. On Windows it does not.
-- `pnpm db:seed` creates the sample school used in the designs (classes Play Group–Class 10, sample students and payments). Seed data must never run in production builds.
+- `pnpm db:migrate` applies migrations and regenerates the Prisma client.
+- `pnpm db:seed` loads the sample school from the designs into an empty database. Sign in as `sarita.admin` (Super Admin) or `bikash.acc` (Accountant) with the password `mikey-dev-2083`. It refuses to run unless `MIKEY_ALLOW_DEV_SEED=yes` and the database has no users. Never set that variable on Computer 1, and the server installer must not ship the seed.
+- To start the dev database again: `pnpm --filter @mikey/db exec prisma migrate reset` (it asks first), then `pnpm db:seed`.
+- `pnpm test` needs the dev database running. The database tests drop and recreate `mikeyems_test` before each run. Nothing is ever truncated, and no test or seed switches a trigger off.
 
 ## Environment variables (server)
 
@@ -111,7 +126,7 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 | --- | --- | --- |
 | `DATABASE_URL` | `postgresql://mikey:***@127.0.0.1:5432/mikeyems` | Must point at 127.0.0.1 |
 | `API_PORT` | `3100` | |
-| `API_HOST` | `0.0.0.0` | Firewall restricts who can connect |
+| `API_HOST` | `0.0.0.0` | The firewall opens port 3100 to the local subnet only |
 | `BACKUP_DIR` | `D:\MikeyBackups` | Overridable in settings |
 | `TZ` | `Asia/Kathmandu` | Required |
 

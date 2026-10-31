@@ -1,3 +1,879 @@
+// Conventions: docs/DATA_MODEL.md. CHECK constraints and the triggers that stop posted money
+// records changing live in the migration SQL, because Prisma cannot express them.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+  previewFeatures        = ["partialIndexes"]
+}
+
 datasource db {
   provider = "postgresql"
+}
+
+enum RoleName {
+  super_admin
+  accountant
+
+  @@map("role_name")
+}
+
+enum PersonStatus {
+  active
+  inactive
+
+  @@map("person_status")
+}
+
+enum Gender {
+  female
+  male
+  other
+
+  @@map("gender")
+}
+
+enum FeeHeadKind {
+  once
+  monthly
+  annual
+  per_exam
+  optional
+
+  @@map("fee_head_kind")
+}
+
+enum FeeDueStatus {
+  unpaid
+  part_paid
+  paid
+  cancelled
+
+  @@map("fee_due_status")
+}
+
+enum PaymentMethod {
+  cash
+  bank_deposit
+  cheque
+  fonepay
+  esewa
+  khalti
+
+  @@map("payment_method")
+}
+
+enum VoidReason {
+  wrong_student
+  wrong_amount
+  wrong_method
+  other
+
+  @@map("void_reason")
+}
+
+enum VoidRequestStatus {
+  pending
+  approved
+  declined
+
+  @@map("void_request_status")
+}
+
+enum AccountKind {
+  cash
+  bank
+
+  @@map("account_kind")
+}
+
+enum EntryDirection {
+  in
+  out
+
+  @@map("entry_direction")
+}
+
+enum PersonType {
+  student
+  staff
+
+  @@map("person_type")
+}
+
+enum AttendanceStatus {
+  P
+  L
+  E
+  I
+  A
+  H
+  LV
+
+  @@map("attendance_status")
+}
+
+enum DeviceConnection {
+  lan
+  usb
+  wifi
+  file
+
+  @@map("device_connection")
+}
+
+enum DeviceStatus {
+  active
+  disabled
+
+  @@map("device_status")
+}
+
+enum ConnectionRequestStatus {
+  pending
+  allowed
+  declined
+  expired
+
+  @@map("connection_request_status")
+}
+
+// People and school structure
+
+model User {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username     String       @unique
+  passwordHash String       @map("password_hash")
+  fullName     String       @map("full_name")
+  roleId       String       @map("role_id") @db.Uuid
+  status       PersonStatus @default(active)
+  lastLoginAt  DateTime?    @map("last_login_at") @db.Timestamptz
+  failedLogins Int          @default(0) @map("failed_logins")
+  lockedUntil  DateTime?    @map("locked_until") @db.Timestamptz
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  createdBy    String?      @map("created_by") @db.Uuid
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version      Int          @default(1)
+
+  role                      Role                   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  sessions                  Session[]
+  paymentsTaken             Payment[]
+  receiptPrints             ReceiptPrint[]
+  voidRequestsMade          VoidRequest[]          @relation("VoidRequestRequestedBy")
+  voidRequestsDecided       VoidRequest[]          @relation("VoidRequestDecidedBy")
+  voidsMade                 VoidRecord[]
+  finesWaived               Fine[]
+  incomesEntered            Income[]
+  expensesEntered           Expense[]
+  transfersEntered          Transfer[]
+  dayCloses                 DayClose[]
+  attendanceCorrections     AttendanceCorrection[]
+  auditLogs                 AuditLog[]
+  connectionRequestsDecided ConnectionRequest[]
+  computersAllowed          AllowedComputer[]      @relation("AllowedComputerAllowedBy")
+  computersRemoved          AllowedComputer[]      @relation("AllowedComputerRemovedBy")
+
+  @@map("users")
+}
+
+model Role {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      RoleName @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId        String   @map("role_id") @db.Uuid
+  permissionKey String   @map("permission_key")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy     String?  @map("created_by") @db.Uuid
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([roleId, permissionKey])
+  @@map("role_permissions")
+}
+
+model Session {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  tokenHash  String   @unique @map("token_hash")
+  computer   Int      @db.SmallInt
+  lastSeenAt DateTime @map("last_seen_at") @db.Timestamptz
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model AcademicSession {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String    @unique
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  isCurrent Boolean   @default(false) @map("is_current")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version   Int       @default(1)
+
+  enrollments   StudentEnrollment[]
+  feeStructures FeeStructure[]
+  feeDues       FeeDue[]
+
+  @@unique([isCurrent], map: "academic_sessions_one_current", where: raw("is_current"))
+  @@map("academic_sessions")
+}
+
+model SchoolClass {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version   Int      @default(1)
+
+  sections      Section[]
+  feeStructures FeeStructure[]
+
+  @@map("classes")
+}
+
+model Section {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  classId   String   @map("class_id") @db.Uuid
+  name      String
+  sortOrder Int      @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version   Int      @default(1)
+
+  schoolClass SchoolClass         @relation(fields: [classId], references: [id], onDelete: Restrict)
+  enrollments StudentEnrollment[]
+
+  @@unique([classId, name])
+  @@map("sections")
+}
+
+model Student {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentCode   String       @unique @map("student_code")
+  fullName      String       @map("full_name")
+  gender        Gender
+  dobDate       DateTime     @map("dob_date") @db.Date
+  bloodGroup    String?      @map("blood_group")
+  address       String
+  photoPath     String?      @map("photo_path")
+  admissionDate DateTime     @map("admission_date") @db.Date
+  status        PersonStatus @default(active)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  createdBy     String?      @map("created_by") @db.Uuid
+  updatedAt     DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version       Int          @default(1)
+
+  enrollments StudentEnrollment[]
+  guardians   Guardian[]
+  feeDues     FeeDue[]
+  payments    Payment[]
+
+  @@map("students")
+}
+
+model StudentEnrollment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId String   @map("student_id") @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  sectionId String   @map("section_id") @db.Uuid
+  rollNo    Int      @map("roll_no")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version   Int      @default(1)
+
+  student Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  session AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  section Section         @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, sectionId, rollNo])
+  @@unique([studentId, sessionId])
+  @@index([sectionId])
+  @@map("student_enrollments")
+}
+
+model Guardian {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId    String   @map("student_id") @db.Uuid
+  fullName     String   @map("full_name")
+  relationship String
+  phone        String
+  altPhone     String?  @map("alt_phone")
+  address      String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy    String?  @map("created_by") @db.Uuid
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version      Int      @default(1)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@index([studentId])
+  @@map("guardians")
+}
+
+// Fees
+
+model FeeHead {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String      @unique
+  kind      FeeHeadKind
+  isActive  Boolean     @default(true) @map("is_active")
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?     @map("created_by") @db.Uuid
+  updatedAt DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version   Int         @default(1)
+
+  structures FeeStructure[]
+  dues       FeeDue[]
+
+  @@map("fee_heads")
+}
+
+model FeeStructure {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId   String   @map("session_id") @db.Uuid
+  classId     String   @map("class_id") @db.Uuid
+  feeHeadId   String   @map("fee_head_id") @db.Uuid
+  amountPaisa BigInt   @map("amount_paisa")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version     Int      @default(1)
+
+  session     AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  schoolClass SchoolClass     @relation(fields: [classId], references: [id], onDelete: Restrict)
+  feeHead     FeeHead         @relation(fields: [feeHeadId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, classId, feeHeadId])
+  @@map("fee_structures")
+}
+
+model FeeDue {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId     String       @map("student_id") @db.Uuid
+  sessionId     String       @map("session_id") @db.Uuid
+  feeHeadId     String       @map("fee_head_id") @db.Uuid
+  periodLabel   String       @map("period_label")
+  billDate      DateTime     @map("bill_date") @db.Date
+  dueDate       DateTime     @map("due_date") @db.Date
+  amountPaisa   BigInt       @map("amount_paisa")
+  discountPaisa BigInt       @default(0) @map("discount_paisa")
+  status        FeeDueStatus @default(unpaid)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  createdBy     String?      @map("created_by") @db.Uuid
+  updatedAt     DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version       Int          @default(1)
+
+  student     Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  session     AcademicSession     @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  feeHead     FeeHead             @relation(fields: [feeHeadId], references: [id], onDelete: Restrict)
+  fines       Fine[]
+  allocations PaymentAllocation[]
+
+  @@index([studentId, status])
+  @@map("fee_dues")
+}
+
+model Fine {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feeDueId    String    @map("fee_due_id") @db.Uuid
+  amountPaisa BigInt    @map("amount_paisa")
+  reason      String
+  waivedAt    DateTime? @map("waived_at") @db.Timestamptz
+  waivedById  String?   @map("waived_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdBy   String?   @map("created_by") @db.Uuid
+
+  feeDue      FeeDue              @relation(fields: [feeDueId], references: [id], onDelete: Restrict)
+  waivedBy    User?               @relation(fields: [waivedById], references: [id], onDelete: Restrict)
+  allocations PaymentAllocation[]
+
+  @@index([feeDueId])
+  @@map("fines")
+}
+
+// Payments and receipts
+
+model Payment {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId      String        @map("student_id") @db.Uuid
+  idempotencyKey String        @unique @map("idempotency_key") @db.Uuid
+  paidDate       DateTime      @map("paid_date") @db.Date
+  method         PaymentMethod
+  reference      String?
+  amountPaisa    BigInt        @map("amount_paisa")
+  accountId      String        @map("account_id") @db.Uuid
+  takenById      String        @map("taken_by") @db.Uuid
+  computer       Int           @db.SmallInt
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  account        Account             @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  takenBy        User                @relation(fields: [takenById], references: [id], onDelete: Restrict)
+  allocations    PaymentAllocation[]
+  receipt        Receipt?
+  voidRequests   VoidRequest[]
+  voidRecord     VoidRecord?
+  accountEntries AccountEntry[]
+
+  @@index([studentId])
+  @@index([paidDate])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId   String   @map("payment_id") @db.Uuid
+  feeDueId    String?  @map("fee_due_id") @db.Uuid
+  fineId      String?  @map("fine_id") @db.Uuid
+  amountPaisa BigInt   @map("amount_paisa")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy   String?  @map("created_by") @db.Uuid
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  feeDue  FeeDue? @relation(fields: [feeDueId], references: [id], onDelete: Restrict)
+  fine    Fine?   @relation(fields: [fineId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, feeDueId])
+  @@unique([paymentId, fineId])
+  @@index([feeDueId])
+  @@index([fineId])
+  @@map("payment_allocations")
+}
+
+model Receipt {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId  String   @unique @map("payment_id") @db.Uuid
+  receiptNo  String   @unique @map("receipt_no")
+  fiscalYear String   @map("fiscal_year")
+  seq        Int
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy  String?  @map("created_by") @db.Uuid
+
+  payment Payment        @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  prints  ReceiptPrint[]
+
+  @@unique([fiscalYear, seq])
+  @@map("receipts")
+}
+
+model ReceiptCounter {
+  fiscalYear String   @id @map("fiscal_year")
+  lastSeq    Int      @default(0) @map("last_seq")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy  String?  @map("created_by") @db.Uuid
+
+  @@map("receipt_counters")
+}
+
+model ReceiptPrint {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiptId   String   @map("receipt_id") @db.Uuid
+  printNo     Int      @map("print_no")
+  computer    Int      @db.SmallInt
+  printedById String   @map("printed_by") @db.Uuid
+  printedAt   DateTime @default(now()) @map("printed_at") @db.Timestamptz
+
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  printedBy User    @relation(fields: [printedById], references: [id], onDelete: Restrict)
+
+  @@unique([receiptId, printNo])
+  @@map("receipt_prints")
+}
+
+model VoidRequest {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId     String?           @map("payment_id") @db.Uuid
+  incomeId      String?           @map("income_id") @db.Uuid
+  expenseId     String?           @map("expense_id") @db.Uuid
+  reason        VoidReason        @map("reason_code")
+  details       String
+  status        VoidRequestStatus @default(pending)
+  requestedById String            @map("requested_by") @db.Uuid
+  requestedAt   DateTime          @default(now()) @map("requested_at") @db.Timestamptz
+  decidedById   String?           @map("decided_by") @db.Uuid
+  decidedAt     DateTime?         @map("decided_at") @db.Timestamptz
+  decisionNote  String?           @map("decision_note")
+
+  payment     Payment?    @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  income      Income?     @relation(fields: [incomeId], references: [id], onDelete: Restrict)
+  expense     Expense?    @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  requestedBy User        @relation("VoidRequestRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedBy   User?       @relation("VoidRequestDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  voidRecord  VoidRecord?
+
+  @@unique([paymentId], map: "void_requests_one_pending_payment", where: raw("status = 'pending'"))
+  @@unique([incomeId], map: "void_requests_one_pending_income", where: raw("status = 'pending'"))
+  @@unique([expenseId], map: "void_requests_one_pending_expense", where: raw("status = 'pending'"))
+  @@index([status])
+  @@map("void_requests")
+}
+
+model VoidRecord {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId     String?    @unique @map("payment_id") @db.Uuid
+  incomeId      String?    @unique @map("income_id") @db.Uuid
+  expenseId     String?    @unique @map("expense_id") @db.Uuid
+  reason        VoidReason @map("reason_code")
+  note          String?
+  voidRequestId String?    @unique @map("void_request_id") @db.Uuid
+  voidedById    String     @map("voided_by") @db.Uuid
+  voidedAt      DateTime   @default(now()) @map("voided_at") @db.Timestamptz
+
+  payment        Payment?       @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  income         Income?        @relation(fields: [incomeId], references: [id], onDelete: Restrict)
+  expense        Expense?       @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  voidRequest    VoidRequest?   @relation(fields: [voidRequestId], references: [id], onDelete: Restrict)
+  voidedBy       User           @relation(fields: [voidedById], references: [id], onDelete: Restrict)
+  accountEntries AccountEntry[]
+
+  @@map("voids")
+}
+
+// Accounts
+
+model Account {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String      @unique
+  kind           AccountKind
+  bankName       String?     @map("bank_name")
+  accountNoLast4 String?     @map("account_no_last4")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  createdBy      String?     @map("created_by") @db.Uuid
+  updatedAt      DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version        Int         @default(1)
+
+  entries      AccountEntry[]
+  payments     Payment[]
+  incomes      Income[]
+  expenses     Expense[]
+  transfersOut Transfer[]     @relation("TransferFrom")
+  transfersIn  Transfer[]     @relation("TransferTo")
+
+  @@map("accounts")
+}
+
+model AccountEntry {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId   String         @map("account_id") @db.Uuid
+  entryDate   DateTime       @map("entry_date") @db.Date
+  direction   EntryDirection
+  amountPaisa BigInt         @map("amount_paisa")
+  paymentId   String?        @map("payment_id") @db.Uuid
+  incomeId    String?        @map("income_id") @db.Uuid
+  expenseId   String?        @map("expense_id") @db.Uuid
+  transferId  String?        @map("transfer_id") @db.Uuid
+  voidId      String?        @map("void_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  createdBy   String?        @map("created_by") @db.Uuid
+
+  account    Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  payment    Payment?    @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  income     Income?     @relation(fields: [incomeId], references: [id], onDelete: Restrict)
+  expense    Expense?    @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  transfer   Transfer?   @relation(fields: [transferId], references: [id], onDelete: Restrict)
+  voidRecord VoidRecord? @relation(fields: [voidId], references: [id], onDelete: Restrict)
+
+  @@index([accountId, entryDate])
+  @@map("account_entries")
+}
+
+model IncomeCategory {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version   Int      @default(1)
+
+  incomes Income[]
+
+  @@map("income_categories")
+}
+
+model ExpenseCategory {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version   Int      @default(1)
+
+  expenses Expense[]
+
+  @@map("expense_categories")
+}
+
+model Income {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotencyKey String   @unique @map("idempotency_key") @db.Uuid
+  categoryId     String   @map("category_id") @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  incomeDate     DateTime @map("income_date") @db.Date
+  amountPaisa    BigInt   @map("amount_paisa")
+  description    String
+  voucherNo      String?  @map("voucher_no")
+  enteredById    String   @map("entered_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  category       IncomeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  account        Account        @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  enteredBy      User           @relation(fields: [enteredById], references: [id], onDelete: Restrict)
+  voidRequests   VoidRequest[]
+  voidRecord     VoidRecord?
+  accountEntries AccountEntry[]
+
+  @@index([incomeDate])
+  @@map("incomes")
+}
+
+model Expense {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotencyKey String   @unique @map("idempotency_key") @db.Uuid
+  categoryId     String   @map("category_id") @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  expenseDate    DateTime @map("expense_date") @db.Date
+  amountPaisa    BigInt   @map("amount_paisa")
+  description    String
+  voucherNo      String?  @map("voucher_no")
+  enteredById    String   @map("entered_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  category       ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  account        Account         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  enteredBy      User            @relation(fields: [enteredById], references: [id], onDelete: Restrict)
+  voidRequests   VoidRequest[]
+  voidRecord     VoidRecord?
+  accountEntries AccountEntry[]
+
+  @@index([expenseDate])
+  @@map("expenses")
+}
+
+model Transfer {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotencyKey String   @unique @map("idempotency_key") @db.Uuid
+  fromAccountId  String   @map("from_account_id") @db.Uuid
+  toAccountId    String   @map("to_account_id") @db.Uuid
+  transferDate   DateTime @map("transfer_date") @db.Date
+  amountPaisa    BigInt   @map("amount_paisa")
+  note           String?
+  enteredById    String   @map("entered_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  fromAccount    Account        @relation("TransferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount      Account        @relation("TransferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
+  enteredBy      User           @relation(fields: [enteredById], references: [id], onDelete: Restrict)
+  accountEntries AccountEntry[]
+
+  @@map("transfers")
+}
+
+model DayClose {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  closeDate         DateTime @unique @map("close_date") @db.Date
+  expectedCashPaisa BigInt   @map("expected_cash_paisa")
+  countedCashPaisa  BigInt   @map("counted_cash_paisa")
+  differencePaisa   BigInt   @map("difference_paisa")
+  denominations     Json
+  note              String?
+  closedById        String   @map("closed_by") @db.Uuid
+  closedAt          DateTime @default(now()) @map("closed_at") @db.Timestamptz
+
+  closedBy User @relation(fields: [closedById], references: [id], onDelete: Restrict)
+
+  @@map("day_closes")
+}
+
+// Attendance (the Accountant build only reads these)
+
+model Device {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String
+  brand         String?
+  model         String?
+  serial        String?
+  connection    DeviceConnection
+  host          String?
+  port          Int?
+  status        DeviceStatus     @default(active)
+  lastSyncAt    DateTime?        @map("last_sync_at") @db.Timestamptz
+  lastSuccessAt DateTime?        @map("last_success_at") @db.Timestamptz
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  createdBy     String?          @map("created_by") @db.Uuid
+  updatedAt     DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version       Int              @default(1)
+
+  syncRuns DeviceSyncRun[]
+
+  @@map("devices")
+}
+
+model DeviceSyncRun {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deviceId       String    @map("device_id") @db.Uuid
+  startedAt      DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt     DateTime? @map("finished_at") @db.Timestamptz
+  readCount      Int       @default(0) @map("read_count")
+  newCount       Int       @default(0) @map("new_count")
+  duplicateCount Int       @default(0) @map("duplicate_count")
+  unlinkedCount  Int       @default(0) @map("unlinked_count")
+  error          String?
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+
+  @@index([deviceId, startedAt])
+  @@map("device_sync_runs")
+}
+
+model AttendanceRule {
+  id                     String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appliesTo              PersonType @unique @map("applies_to")
+  startTime              String     @map("start_time")
+  graceMinutes           Int        @map("grace_minutes")
+  lastCheckinTime        String     @map("last_checkin_time")
+  earlyLeaveBefore       String     @map("early_leave_before")
+  dayCloseTime           String     @map("day_close_time")
+  requireCheckout        Boolean    @map("require_checkout")
+  duplicateWindowMinutes Int        @map("duplicate_window_minutes")
+  createdAt              DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  createdBy              String?    @map("created_by") @db.Uuid
+  updatedAt              DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version                Int        @default(1)
+
+  @@map("attendance_rules")
+}
+
+model AttendanceDay {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  personType     PersonType       @map("person_type")
+  personId       String           @map("person_id") @db.Uuid
+  dayDate        DateTime         @map("day_date") @db.Date
+  computedStatus AttendanceStatus @map("computed_status")
+  firstInAt      DateTime?        @map("first_in_at") @db.Timestamptz
+  lastOutAt      DateTime?        @map("last_out_at") @db.Timestamptz
+  isFinal        Boolean          @default(false) @map("is_final")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  createdBy      String?          @map("created_by") @db.Uuid
+  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([personType, personId, dayDate])
+  @@index([dayDate])
+  @@map("attendance_days")
+}
+
+model AttendanceCorrection {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  personType    PersonType       @map("person_type")
+  personId      String           @map("person_id") @db.Uuid
+  dayDate       DateTime         @map("day_date") @db.Date
+  status        AttendanceStatus
+  reason        String
+  correctedById String           @map("corrected_by") @db.Uuid
+  correctedAt   DateTime         @default(now()) @map("corrected_at") @db.Timestamptz
+
+  correctedBy User @relation(fields: [correctedById], references: [id], onDelete: Restrict)
+
+  @@index([personType, personId, dayDate])
+  @@map("attendance_corrections")
+}
+
+model Holiday {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dayDate   DateTime @unique @map("day_date") @db.Date
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+
+  @@map("holidays")
+}
+
+// System
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  at         DateTime @default(now()) @db.Timestamptz
+  userId     String?  @map("user_id") @db.Uuid
+  computer   Int      @db.SmallInt
+  action     String
+  area       String
+  recordType String?  @map("record_type")
+  recordId   String?  @map("record_id")
+  summary    String
+  before     Json?
+  after      Json?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([at])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version   Int      @default(1)
+
+  @@map("settings")
+}
+
+model ConnectionRequest {
+  id           String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ip           String                  @db.Inet
+  computerName String                  @map("computer_name")
+  requestedAt  DateTime                @default(now()) @map("requested_at") @db.Timestamptz
+  lastSeenAt   DateTime                @default(now()) @map("last_seen_at") @db.Timestamptz
+  status       ConnectionRequestStatus @default(pending)
+  decidedById  String?                 @map("decided_by") @db.Uuid
+  decidedAt    DateTime?               @map("decided_at") @db.Timestamptz
+
+  decidedBy User? @relation(fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@unique([ip], map: "connection_requests_one_pending_ip", where: raw("status = 'pending'"))
+  @@index([ip, status])
+  @@map("connection_requests")
+}
+
+model AllowedComputer {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ip           String    @unique @db.Inet
+  computerName String    @map("computer_name")
+  allowedById  String    @map("allowed_by") @db.Uuid
+  allowedAt    DateTime  @default(now()) @map("allowed_at") @db.Timestamptz
+  removedById  String?   @map("removed_by") @db.Uuid
+  removedAt    DateTime? @map("removed_at") @db.Timestamptz
+
+  allowedBy User  @relation("AllowedComputerAllowedBy", fields: [allowedById], references: [id], onDelete: Restrict)
+  removedBy User? @relation("AllowedComputerRemovedBy", fields: [removedById], references: [id], onDelete: Restrict)
+
+  @@map("allowed_computers")
 }

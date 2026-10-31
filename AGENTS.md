@@ -17,7 +17,7 @@ Full scope: `docs/PRODUCT.md`. Architecture: `docs/ARCHITECTURE.md`.
 
 Electron + React + TypeScript (strict) + Tailwind CSS + shadcn/ui + Recharts in the desktop app. Node.js + Fastify + Prisma + PostgreSQL + Zod in the server. PDFKit for PDFs, ExcelJS for Excel, electron-builder for the installer, `@aws-sdk/client-s3` for R2.
 
-Also approved: pnpm workspaces, electron-vite, TanStack Query (server data cache only), lucide-react (icons), `@fontsource/anek-latin` and `@fontsource/ibm-plex-sans`, a lookup-table BS date library such as `nepali-date-converter`, an argon2id package for password hashing, `croner` for scheduled jobs, vitest.
+Also approved: pnpm workspaces, electron-vite, TanStack Query (server data cache only), lucide-react (icons), `@fontsource/anek-latin` and `@fontsource/ibm-plex-sans`, a lookup-table BS date library such as `nepali-date-converter`, an argon2id package for password hashing, `croner` for scheduled jobs, vitest, `@prisma/adapter-pg` (Prisma 7's PostgreSQL driver adapter, which brings in `pg`).
 
 Do not add any other runtime dependency without saying why in the PR/commit message and checking that an existing dependency cannot do it. Pin every dependency to an exact version (no `^` or `~`). No state-management library, no CSS-in-JS, no ORM besides Prisma, no second UI kit.
 
@@ -55,7 +55,7 @@ If a command above does not exist yet, create it in the root `package.json` the 
 These exist because breaking them causes wrong money, lost data or a failed audit. Details and examples: `docs/DOMAIN_RULES.md`.
 
 1. **Money is an integer number of paisa.** Never use floats for money. Use the helpers in `packages/shared/src/money.ts` to parse, add, and format. Display with lakh grouping: `Rs. 12,34,567`.
-2. **Posted financial records are never updated or deleted.** Payments, receipts, income, expenses and cash/bank entries are append-only. A mistake is fixed with a void or reversal record that has a reason, a user and a timestamp. There is no delete endpoint for them.
+2. **Posted financial records are never updated or deleted.** Payments, receipts, income, expenses and cash/bank entries are append-only. A mistake is fixed with a void or reversal record that has a reason, a user and a timestamp. There is no delete endpoint for them. Their status (posted, void requested, voided) is worked out from `void_requests` and `voids`, and every receipt print is a new row in `receipt_prints`; the original row never changes. Database triggers enforce this.
 3. **Receipt numbers come only from the server**, inside the same database transaction as the payment, in the format `2083/84-000001`, restarting each fiscal year. The client never creates or guesses a receipt number.
 4. **Every money-changing request carries an idempotency key** (UUID made when the form opens). A repeated request with the same key returns the original result and creates nothing new.
 5. **Every write checks permission on the server.** Hiding a button in the UI is not security. Use `requirePermission('<key>')` on every route that changes or reads restricted data. Permission keys live in `packages/shared/src/permissions.ts`.
@@ -71,6 +71,7 @@ These exist because breaking them causes wrong money, lost data or a failed audi
 - Do not invent fee rules, attendance times, receipt layouts or printer sizes. Use settings from the database, with defaults from `docs/DOMAIN_RULES.md`.
 - Do not add features, options, abstractions or config "for later". Build the smallest thing that meets the task.
 - Do not write placeholder logic that looks finished (fake totals, hard-coded balances, `TODO` returns that pass type checks). If something is not implemented, throw a clear error.
+- Do not switch off a database trigger. Only a reviewed migration may disable one; it must turn it back on in the same migration, and the commit message must say why. Tests and the seed never disable triggers.
 - Do not catch an error just to hide it. Either handle it with a user-facing message or let it reach the global handler.
 - Do not change the Prisma schema, permission keys or API contracts without updating `docs/DATA_MODEL.md` and the shared Zod schemas in the same change.
 - Do not use the network from the renderer except to the configured server URL.

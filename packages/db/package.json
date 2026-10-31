@@ -2,10 +2,22 @@
   "name": "@mikey/db",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
+    "postinstall": "prisma generate",
+    "migrate": "prisma migrate dev && prisma generate",
+    "seed": "node --env-file-if-exists=../../apps/server/.env src/seed.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "@mikey/shared": "workspace:*",
+    "@node-rs/argon2": "2.2.2",
     "prisma": "7.10.1"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1"
   }
 }

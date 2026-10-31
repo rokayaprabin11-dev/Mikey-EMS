@@ -88,7 +88,7 @@ export const transferSchema = z.object({
   to: accountRefSchema,
   amount: positivePaisaSchema,
   note: z.string().nullable(),
-  createdBy: z.string(),
+  enteredBy: z.string(),
   createdAt: timestampSchema,
 })
 

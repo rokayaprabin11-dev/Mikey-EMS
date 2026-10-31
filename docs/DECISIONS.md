@@ -25,6 +25,8 @@ Agents: anything under **Open questions** is not decided. Do not build it, do no
 | D17 | Prisma 7, connecting through `@prisma/adapter-pg` and `pg`. | Prisma 7 needs a driver adapter. Decided 2026-10-31 by Prabin Rokaya. |
 | D18 | A void request gives one of four reasons (Wrong student, Wrong amount, Wrong payment method, Other) plus details for the Super Admin. | Matches the Accountant design. Decided 2026-10-31 by Prabin Rokaya. |
 | D19 | Until Q14 is answered, the server dates every income and expense today. | Back-dating could change a day that is already closed. Decided 2026-10-31 by Prabin Rokaya. |
+| D20 | A computer asks to connect through `POST /api/v1/connection-requests` (no session, local subnet only, limits in ARCHITECTURE.md). While pending it repeats the request once a minute; repeats never reopen a declined request, and "Ask again" sends a fresh one. The Super Admin allows or declines it on Computer 1, and allowing adds its IP to the server's allow list. Every route except `/health` and `/connection-requests` refuses computers that are not allowed; `127.0.0.1` is always allowed. The Computer 1 installer creates one firewall rule that opens port 3100 to the local subnet only, with no per-computer rules. | Computer 2 has to reach Computer 1 before anyone can allow it, and the server never needs admin rights while it runs. The allow list is extra protection; sign-in and permissions are the real security. Decided 2026-10-31 by Prabin Rokaya. |
+| D21 | `/health` also returns `serverName` and `schoolName`, and nothing more. | Lets the accountant see that the right machine answered. Decided 2026-10-31 by Prabin Rokaya. |
 
 ## Open questions (confirm with the school before building)
 

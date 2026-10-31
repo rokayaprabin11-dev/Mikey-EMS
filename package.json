@@ -11,7 +11,9 @@
     "build": "pnpm --filter @mikey/desktop build",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "db:migrate": "pnpm --filter @mikey/db migrate",
+    "db:seed": "pnpm --filter @mikey/db seed"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

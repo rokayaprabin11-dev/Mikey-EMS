@@ -1,0 +1,16 @@
+# Development database only. Production runs PostgreSQL as a Windows service on Computer 1.
+services:
+  postgres:
+    image: postgres:16.15
+    container_name: mikeyems-dev
+    environment:
+      POSTGRES_USER: mikey
+      POSTGRES_PASSWORD: mikey
+      POSTGRES_DB: mikeyems
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - mikeyems-dev-data:/var/lib/postgresql/data
+
+volumes:
+  mikeyems-dev-data:

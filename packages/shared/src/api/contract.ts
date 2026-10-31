@@ -34,11 +34,18 @@ import {
 } from './fees.ts'
 import { reportQuerySchema, reportSchema } from './reports.ts'
 import { studentFeesSchema, studentSearchQuerySchema, studentSearchResponseSchema } from './students.ts'
-import { classesResponseSchema, healthResponseSchema, schoolProfileSchema } from './system.ts'
+import {
+  classesResponseSchema,
+  connectionRequestCreateSchema,
+  connectionRequestResponseSchema,
+  healthResponseSchema,
+  schoolProfileSchema,
+} from './system.ts'
 
 export const API_PREFIX = '/api/v1'
 
-export type Access = PermissionKey | 'public' | 'signed_in'
+// Only the first three work without a session; everything except anyone and local_network needs an allowed computer.
+export type Access = PermissionKey | 'anyone' | 'local_network' | 'allowed_computer' | 'signed_in'
 
 export interface Endpoint {
   readonly method: 'GET' | 'POST'
@@ -56,8 +63,21 @@ const accountParams = z.object({ accountId: idSchema })
 const dateParams = z.object({ date: adDateSchema })
 
 export const endpoints = {
-  health: { method: 'GET', path: '/health', access: 'public', response: healthResponseSchema },
-  login: { method: 'POST', path: '/auth/login', access: 'public', body: loginRequestSchema, response: loginResponseSchema },
+  health: { method: 'GET', path: '/health', access: 'anyone', response: healthResponseSchema },
+  requestConnection: {
+    method: 'POST',
+    path: '/connection-requests',
+    access: 'local_network',
+    body: connectionRequestCreateSchema,
+    response: connectionRequestResponseSchema,
+  },
+  login: {
+    method: 'POST',
+    path: '/auth/login',
+    access: 'allowed_computer',
+    body: loginRequestSchema,
+    response: loginResponseSchema,
+  },
   session: { method: 'GET', path: '/auth/session', access: 'signed_in', response: sessionSchema },
   logout: { method: 'POST', path: '/auth/logout', access: 'signed_in', response: 'empty' },
   schoolProfile: { method: 'GET', path: '/school', access: 'signed_in', response: schoolProfileSchema },
