@@ -21,7 +21,7 @@ Conventions:
 
 | Table | Key columns | Notes |
 | --- | --- | --- |
-| `users` | username (unique), password_hash, full_name, role_id, status, last_login_at, failed_logins, locked_until, version | |
+| `users` | username (unique), password_hash, full_name, role_id, status, last_login_at, failed_logins, locked_until, version | `failed_logins` is the number of wrong passwords counted towards the current lock (ARCHITECTURE.md, Sessions and auth); sign-in bookkeeping does not change `version` |
 | `roles` | name (`super_admin`, `accountant`) | Fixed rows |
 | `role_permissions` | role_id, permission_key | Unique pair. Keys from `packages/shared/src/permissions.ts` |
 | `sessions` | user_id, token_hash (unique), computer, last_seen_at, expires_at | |

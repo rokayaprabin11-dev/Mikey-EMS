@@ -33,24 +33,31 @@ Computer 1 (Super Admin, server)                     Computer 2 (Accountant)
 - The server and `packages/shared` run as TypeScript directly on Node 24 (type stripping). Relative imports end in `.ts`, type-only imports use `import type`, and enums and namespaces are not allowed (`erasableSyntaxOnly`).
 - Every route declares a Zod schema for params, query, body and response (from `packages/shared`).
 - Every endpoint (method, path under `/api/v1`, permission and schemas) is listed once in `packages/shared/src/api/contract.ts`. The server and the desktop API client both use that list.
-- Every route requires a session and a permission key except `GET /health` (anyone), `POST /connection-requests` (no session, local subnet only) and `POST /auth/login` (no session). Every route except the first two refuses computers that are not on the allow list with 403 `NOT_ALLOWED`. Each endpoint's `access` in `contract.ts` says which rule applies.
+- Every route requires a session and a permission key except `GET /health` (anyone), `POST /connection-requests` (no session, local subnet only), `POST /auth/login` (no session) and the routes marked `signed_in` (a session but no permission key: the current session, sign-out, school profile and classes). Every route except the first two refuses computers that are not on the allow list with 403 `NOT_ALLOWED`. Each endpoint's `access` in `contract.ts` says which rule applies. The server checks access before it reads the request, so a caller who may not use a route never learns what it expects.
+- The server registers each route from its `contract.ts` entry (`apps/server/src/http/route.ts`). The handler gets parsed input and its reply is checked against the response schema before it is sent.
 - Errors use one shape:
   ```json
   { "error": { "code": "RECEIPT_ALREADY_VOIDED", "message": "This receipt was already voided at 10:12 AM.", "details": {} } }
   ```
   `code` is stable and SCREAMING_SNAKE; `message` is safe to show the user.
 - HTTP status: 400 validation, 401 not signed in, 403 no permission, 404 not found, 409 conflict (stale version, duplicate, already voided), 422 business rule broken, 503 dependency down.
+- Codes every route can return: 400 `VALIDATION_FAILED` (with `details.issues`), 400 `BAD_REQUEST` (the body is not valid JSON), 401 `NOT_SIGNED_IN`, 401 `SESSION_EXPIRED`, 403 `NOT_ALLOWED`, 403 `NO_PERMISSION`, 404 `NOT_FOUND` (also for an address the server does not have, which usually means the two computers run different versions) and 500 `INTERNAL_ERROR` (the cause is logged on Computer 1, never sent).
 
 ### Sessions and auth
 
 - Passwords hashed with argon2id. Minimum 8 characters.
-- Login returns an opaque random token; the server stores only its hash in `sessions`. Token kept in renderer memory (re-login after app restart).
-- Idle timeout 15 minutes (sliding), absolute limit 12 hours. A warning dialog appears 60 seconds before idle sign-out.
-- Five failed logins in 10 minutes lock that username for 10 minutes; record in audit log.
+- Login returns an opaque random token (32 random bytes); the server stores only its SHA-256 hash in `sessions`, with the computer (1 or 2) it signed in from. The desktop sends it as `Authorization: Bearer <token>` and keeps it in renderer memory (re-login after app restart).
+- Idle timeout 15 minutes (sliding: every signed-in request starts it again), absolute limit 12 hours. A warning dialog appears 60 seconds before idle sign-out. Polling `/health` needs no session, so it never keeps one alive. An ended session is deleted, its next request gets 401 `SESSION_EXPIRED`, and an audit row is written.
+- A wrong username and a wrong password get the same answer: 401 `WRONG_USERNAME_OR_PASSWORD`. An unknown username still costs one password check, so the two take the same time.
+- Five failed logins in 10 minutes lock that username for 10 minutes; record in audit log. The server counts that user's `auth.sign_in_failed` audit rows from the last 10 minutes, leaving out any from before their last sign-in or before their last lock ended. It counts with the user row locked, so wrong passwords sent at the same moment are counted one by one. While it is locked, even the right password gets 403 `ACCOUNT_LOCKED`, and the message says how many minutes are left.
+- A switched-off account gets 403 `ACCOUNT_INACTIVE`, but only with the right password, and its open sessions end at their next request.
+- Audit actions: `auth.signed_in`, `auth.signed_out`, `auth.sign_in_failed` (wrong username or password), `auth.sign_in_refused` (locked or switched off), `auth.locked` and `auth.session_ended` (idle, 12 hours, or switched off).
 
 ### Health and connection status
 
 - `GET /health` returns `{ server: "ok", db: "ok"|"down", device: "connected"|"not_responding"|"none", cloudBackup: "uploaded"|"waiting"|"failed"|"not_set_up", allowed: true|false, time, serverName, schoolName }`. `allowed` says whether the calling computer is on the allow list. `serverName` is this computer's Windows name; `schoolName` comes from the school profile and is empty until Computer 1 setup saves it. Nothing more: no version, no counts, no user data.
+- When the database does not answer, the reply is only `{ server: "ok", db: "down", time, serverName }`: everything else comes from the database, so the server leaves it out rather than guess.
+- `device` is `none` when no device is active, `connected` when the latest pull from every active device worked, and `not_responding` otherwise, including a device that has never been pulled. `cloudBackup` stays `not_set_up` until Computer 1 has cloud backup credentials.
 - The desktop app polls it every 5 seconds. Do **not** use `navigator.onLine` (it says "online" whenever any network exists).
 - After 2 failed polls: show "Reconnecting". After 15 seconds: Computer 2 shows the blocking "Can't reach Computer 1" screen. Any form that was mid-submit shows "not saved". Never queue money writes on the client.
 
@@ -60,10 +67,19 @@ The allow list is extra protection only. Sign-in and permissions remain the real
 
 - Windows Firewall: the Computer 1 installer creates one rule that opens port 3100 to the local subnet only, never to "any". There are no per-computer rules, so the server never needs admin rights while it runs.
 - The server's allow list does the gating: every route except `/health` and `/connection-requests` refuses a computer that is not on it (403 `NOT_ALLOWED`). `127.0.0.1` is always allowed, so Computer 1 can reach itself.
-- Computer 2 asks to connect with `POST /api/v1/connection-requests { computerName, askAgain }`. It needs no session, but the server accepts it only from its own local subnet. The server records the caller's IP as it sees it, plus the computer name, and replies with that IP and the request's status (`pending`, `allowed` or `declined`).
+- Computer 2 asks to connect with `POST /api/v1/connection-requests { computerName, askAgain }`. It needs no session, but the server accepts it only from its own local subnet: an IPv4 address inside the subnet of one of Computer 1's own network adapters (anything else gets 403 `NOT_ON_LOCAL_NETWORK`). The server records the caller's IP as it sees it, plus the computer name, and replies with that IP and the request's status (`pending`, `allowed` or `declined`).
 - Limits: 1 request per minute per IP, at most 10 pending requests, and pending requests expire after 24 hours. A repeat from the same IP refreshes its pending request instead of adding another.
+  - A repeat within a minute changes nothing. A later one updates the request's `last_seen_at` and computer name, and the 24 hours count from the last repeat.
+  - A declined request stays declined. `askAgain: true` opens a new request, but only once the declined one is at least a minute old.
+  - With 10 requests pending, a new one gets 422 `CONNECTION_REQUESTS_FULL`; repeats of pending requests are still answered.
+  - One database lock covers every change to requests and the allow list, so the limits hold when requests arrive together.
 - Computer 2's "Get allowed" screen sends the request, repeats it once a minute while it is pending, and polls `/health` every 5 seconds until `allowed` is true. Repeats never reopen a declined request: the screen shows "Declined" with an "Ask again" button, which sends a fresh request (`askAgain: true`).
-- Computer 1 lists pending requests in setup step 5 and in Settings → Office network, each with Allow / Not this one, plus "Add a computer by IP address" as a manual fallback. Allowing adds the IP to `allowed_computers`, declining marks the request declined, and removing sets `removed_at`. Each writes an audit row.
+- Computer 1 lists pending requests in setup step 5 and in Settings → Office network, each with Allow / Not this one, plus "Add a computer by IP address" as a manual fallback. Allowing adds the IP to `allowed_computers`, declining marks the request declined, and removing sets `removed_at`. Each writes an audit row (`network.computer_allowed`, `network.request_declined`, `network.computer_removed`).
+- These routes need `settings.manage`:
+  - `GET /connection-requests` lists the pending requests and the allowed computers.
+  - `POST /connection-requests/:requestId/allow` and `POST /connection-requests/:requestId/decline` answer a pending request. One that was already answered or has expired gets 409 `REQUEST_NOT_PENDING`.
+  - `POST /allowed-computers { ip, computerName }` adds an IPv4 address and answers any pending request from it. A `127.x` address gets 422 `ALWAYS_ALLOWED`, and an address already allowed gets 409 `ALREADY_ALLOWED`.
+  - `POST /allowed-computers/:computerId/remove` removes one. Removing it twice gets 409 `ALREADY_REMOVED`.
 - Give both computers a fixed IP address or a DHCP reservation on the office router. If Computer 2's address changes, it simply asks again.
 
 ### Concurrency
@@ -119,13 +135,13 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 - `pnpm db:migrate` applies migrations and regenerates the Prisma client.
 - `pnpm db:seed` loads the sample school from the designs into an empty database. Sign in as `sarita.admin` (Super Admin) or `bikash.acc` (Accountant) with the password `mikey-dev-2083`. It refuses to run unless `MIKEY_ALLOW_DEV_SEED=yes` and the database has no users. Never set that variable on Computer 1, and the server installer must not ship the seed.
 - To start the dev database again: `pnpm --filter @mikey/db exec prisma migrate reset` (it asks first), then `pnpm db:seed`.
-- `pnpm test` needs the dev database running. The database tests drop and recreate `mikeyems_test` before each run. Nothing is ever truncated, and no test or seed switches a trigger off.
+- `pnpm test` needs the dev database running. Before each run the database tests drop and recreate `mikeyems_test`, and the server tests `mikeyems_test_server`. Nothing is ever truncated, and no test or seed switches a trigger off. The server tests call the API in-process with a clock they move forward, so no port is opened.
 
 ## Environment variables (server)
 
 | Name | Example | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgresql://mikey:***@127.0.0.1:5432/mikeyems` | Must point at 127.0.0.1 |
+| `DATABASE_URL` | `postgresql://mikey:***@127.0.0.1:5432/mikeyems` | Must point at 127.0.0.1; the server refuses to start otherwise |
 | `API_PORT` | `3100` | |
 | `API_HOST` | `0.0.0.0` | The firewall opens port 3100 to the local subnet only |
 | `BACKUP_DIR` | `D:\MikeyBackups` | Overridable in settings |

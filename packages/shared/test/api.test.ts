@@ -162,6 +162,12 @@ describe('health check', () => {
     expect(healthResponseSchema.safeParse({ ...health, schoolName: null }).success).toBe(true)
     expect(healthResponseSchema.safeParse({ ...health, serverName: undefined }).success).toBe(false)
   })
+
+  it('sends only the clock and the server name when the database is down', () => {
+    const down = { server: 'ok', db: 'down', time: health.time, serverName: health.serverName }
+    expect(healthResponseSchema.parse({ ...down, allowed: true })).toEqual(down)
+    expect(healthResponseSchema.safeParse({ ...down, serverName: undefined }).success).toBe(false)
+  })
 })
 
 describe('asking to connect', () => {

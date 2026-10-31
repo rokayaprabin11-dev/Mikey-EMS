@@ -1,6 +1,7 @@
 export interface ServerConfig {
   host: string
   port: number
+  databaseUrl: string
 }
 
 const BUSINESS_TIME_ZONE = 'Asia/Kathmandu'
@@ -27,5 +28,13 @@ export function readConfig(env: Record<string, string | undefined>, timeZone: st
     throw new Error(`API_PORT must be a whole number from 1 to 65535, but it is "${env.API_PORT ?? ''}".`)
   }
 
-  return { host, port }
+  const databaseUrl = env.DATABASE_URL
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is not set. For development, copy apps/server/.env.example to apps/server/.env.')
+  }
+  if (!URL.canParse(databaseUrl) || new URL(databaseUrl).hostname !== '127.0.0.1') {
+    throw new Error('DATABASE_URL must point at 127.0.0.1, the only address PostgreSQL listens on.')
+  }
+
+  return { host, port, databaseUrl }
 }

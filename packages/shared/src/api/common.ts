@@ -10,6 +10,8 @@ export const paisaSchema = z.int().nonnegative()
 export const positivePaisaSchema = z.int().positive()
 export const countSchema = z.int().nonnegative()
 
+export const ipSchema = z.union([z.ipv4(), z.ipv6()])
+
 export const receiptNoSchema = z.string().regex(/^\d{4}\/\d{2}-\d{6}$/)
 export const sessionNameSchema = z.string().regex(/^\d{4}$/)
 

@@ -35,9 +35,12 @@ import {
 import { reportQuerySchema, reportSchema } from './reports.ts'
 import { studentFeesSchema, studentSearchQuerySchema, studentSearchResponseSchema } from './students.ts'
 import {
+  allowedComputerCreateSchema,
+  allowedComputerSchema,
   classesResponseSchema,
   connectionRequestCreateSchema,
   connectionRequestResponseSchema,
+  connectionsResponseSchema,
   healthResponseSchema,
   schoolProfileSchema,
 } from './system.ts'
@@ -57,6 +60,8 @@ export interface Endpoint {
   readonly response: ZodType | 'pdf' | 'xlsx' | 'empty'
 }
 
+const requestParams = z.object({ requestId: idSchema })
+const computerParams = z.object({ computerId: idSchema })
 const studentParams = z.object({ studentId: idSchema })
 const paymentParams = z.object({ paymentId: idSchema })
 const accountParams = z.object({ accountId: idSchema })
@@ -80,6 +85,40 @@ export const endpoints = {
   },
   session: { method: 'GET', path: '/auth/session', access: 'signed_in', response: sessionSchema },
   logout: { method: 'POST', path: '/auth/logout', access: 'signed_in', response: 'empty' },
+  listConnections: {
+    method: 'GET',
+    path: '/connection-requests',
+    access: 'settings.manage',
+    response: connectionsResponseSchema,
+  },
+  allowConnection: {
+    method: 'POST',
+    path: '/connection-requests/:requestId/allow',
+    access: 'settings.manage',
+    params: requestParams,
+    response: allowedComputerSchema,
+  },
+  declineConnection: {
+    method: 'POST',
+    path: '/connection-requests/:requestId/decline',
+    access: 'settings.manage',
+    params: requestParams,
+    response: 'empty',
+  },
+  addAllowedComputer: {
+    method: 'POST',
+    path: '/allowed-computers',
+    access: 'settings.manage',
+    body: allowedComputerCreateSchema,
+    response: allowedComputerSchema,
+  },
+  removeAllowedComputer: {
+    method: 'POST',
+    path: '/allowed-computers/:computerId/remove',
+    access: 'settings.manage',
+    params: computerParams,
+    response: 'empty',
+  },
   schoolProfile: { method: 'GET', path: '/school', access: 'signed_in', response: schoolProfileSchema },
   classes: { method: 'GET', path: '/classes', access: 'signed_in', response: classesResponseSchema },
 

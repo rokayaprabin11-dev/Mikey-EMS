@@ -7,6 +7,10 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "fastify": "5.12.7"
+    "@mikey/db": "workspace:*",
+    "@mikey/shared": "workspace:*",
+    "@node-rs/argon2": "2.2.2",
+    "fastify": "5.12.7",
+    "zod": "4.6.7"
   }
 }

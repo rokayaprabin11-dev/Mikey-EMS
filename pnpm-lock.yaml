@@ -238,9 +238,21 @@ importers:
 
   apps/server:
     dependencies:
+      '@mikey/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@mikey/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@node-rs/argon2':
+        specifier: 2.2.2
+        version: 2.2.2
       fastify:
         specifier: 5.12.7
         version: 5.12.7
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   packages/db:
     dependencies:
