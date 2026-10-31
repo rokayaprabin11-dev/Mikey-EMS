@@ -21,12 +21,14 @@ export const studentSearchQuerySchema = z.object({
   withDues: z.stringbool().optional(),
 })
 
+// What the lookup screen shows of a student, and nothing more: date of birth, address and
+// attendance notes are for the Super Admin only. A student may have no guardian on record.
 export const studentSummarySchema = studentRefSchema.extend({
   code: z.string(),
   rollNo: z.int().positive(),
   status: studentStatusSchema,
-  guardianName: z.string(),
-  guardianPhone: z.string(),
+  guardianName: z.string().nullable(),
+  guardianPhone: z.string().nullable(),
   outstanding: paisaSchema,
 })
 
@@ -35,7 +37,7 @@ export const studentSearchResponseSchema = z.object({
 })
 
 export const studentFeesSchema = z.object({
-  student: studentSummarySchema.extend({ guardianRelationship: z.string() }),
+  student: studentSummarySchema.extend({ guardianRelationship: z.string().nullable() }),
   dues: z.array(dueItemSchema),
   paidThisSession: z.object({
     sessionName: sessionNameSchema,

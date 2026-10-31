@@ -140,3 +140,10 @@ There are deliberately no `income.edit` or `expense.edit` keys: saved money reco
 Write one row, in the same transaction, for: sign-in, sign-out, failed sign-in, lockout; student/staff create, edit, deactivate; fee structure change; payment; void request, approval, decline; income, expense, transfer; day close; discount, scholarship, fine waiver; attendance correction; device link/unlink and sync; permission or user change; backup, restore; settings change.
 
 Row fields: user (or `system`), computer (1 or 2), action code, area, record type and ID, human summary, `before` and `after` JSON for changed fields only. Audit rows are never updated or deleted.
+
+## 11. Student lookup
+
+- Search (Ctrl+K, `GET /students`) matches the start of any word of a student's name or student ID (`lama`, `bib lam`, `2076-0098`), the start of a guardian's phone number typed with or without spaces (`98600 12884`, `9860012884`, `98600`), or a roll number of up to three digits. A class filter and "Only with dues" narrow it. At most 20 students come back, sorted by name. **[test]** a search for a guardian's phone number finds the student.
+- A student's class, section and roll are those of their latest enrollment, as fee collection uses them. Inactive students are found too, because they can still owe fees.
+- The Accountant sees what the lookup screen shows and nothing more: name, student ID, class, section, roll, status, primary guardian (name, relationship, phone), what they owe item by item, what they paid this session, and every receipt as printed. Date of birth, address and attendance notes are for the Super Admin only. **[test]**
+- What a student owes is the same everywhere: the search, the dashboards and the dues report work it out for many students in one query, the same way as the student's own ledger. **[test]** they agree.

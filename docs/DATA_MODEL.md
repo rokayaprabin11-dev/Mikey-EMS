@@ -28,9 +28,9 @@ Conventions:
 | `academic_sessions` | name (`2083`), start_date, end_date?, is_current | One current (partial unique index). `end_date` stays empty until the next session starts |
 | `classes` | name (`Play Group`…`Class 10`, unique), sort_order | |
 | `sections` | class_id, name (`A`), sort_order | Unique (class_id, name) |
-| `students` | student_code (`MEMS-2076-0098`, unique), full_name, gender (`female`, `male`, `other`), dob_date, blood_group?, address, photo_path?, admission_date, status, version | |
+| `students` | student_code (`MEMS-2076-0098`, unique), full_name, gender (`female`, `male`, `other`), dob_date, blood_group?, address, photo_path?, admission_date, status, version | GIN index `students_search_idx` on the words of full_name and student_code with punctuation removed (hand-written; the search uses the same expression) |
 | `student_enrollments` | student_id, session_id, section_id, roll_no | Unique (session_id, section_id, roll_no) and (student_id, session_id) |
-| `guardians` | student_id, full_name, relationship, phone, alt_phone?, address? | First guardian is primary |
+| `guardians` | student_id, full_name, relationship, phone, alt_phone?, address? | First guardian is primary. GIN index `guardians_phone_search_idx` on phone and alt_phone as digits only (hand-written) |
 | `staff` *(later)* | employee_code (`EMP-003`, unique), full_name, gender, dob_date, phone, address, designation, department, joining_date, status, photo_path?, version | No salary fields |
 
 ## Fees

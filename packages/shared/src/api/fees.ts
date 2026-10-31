@@ -79,14 +79,8 @@ export const collectPaymentRequestSchema = z
     { error: 'The same due is listed twice.', path: ['allocations'] },
   )
 
-export const receiptLineSchema = z.object({
-  kind: z.enum(['fee', 'fine']),
-  headName: z.string(),
-  periodLabel: z.string(),
-  amount: positivePaisaSchema,
-  wasPartPaid: z.boolean(),
-  clearsDue: z.boolean(),
-})
+// One line of a receipt as it was printed, for example "Monthly tuition, Kartik 2083 (part)".
+export const receiptLineSchema = z.object({ label: z.string().min(1), amount: positivePaisaSchema })
 
 // Everything printed on a receipt, saved when it is issued. Receipts can never be changed, so a
 // receipt shows the same words and amounts for ever, whatever is renamed or edited later.
@@ -111,7 +105,7 @@ export const receiptSnapshotSchema = z
       guardianName: z.string().nullable(),
     }),
     months: z.string().nullable(),
-    lines: z.array(z.object({ label: z.string().min(1), amount: positivePaisaSchema })).min(1),
+    lines: z.array(receiptLineSchema).min(1),
     totals: z.object({
       duesBefore: paisaSchema,
       discount: paisaSchema,
