@@ -12,6 +12,7 @@ import {
   toPaisaNumber,
 } from '@mikey/shared'
 
+import { onlyAccount } from '../accounts/accounts.ts'
 import { writeAudit } from '../audit.ts'
 import type { RequestContext, SessionContext } from '../auth/sessions.ts'
 import { toDbDate } from '../dates.ts'
@@ -83,16 +84,9 @@ function plan(ledger: StudentLedger, requested: CollectPaymentRequest['allocatio
   return result
 }
 
-// Cash goes into the one cash account and every other method into the one bank account. With
-// none, or more than one, this version cannot choose, so it says so instead of guessing.
+// Cash goes into the one cash account and every other method into the one bank account.
 async function receivingAccount(tx: Db, method: PaymentMethod): Promise<string> {
-  const kind = method === 'cash' ? 'cash' : 'bank'
-  const accounts = await tx.account.findMany({ where: { kind }, select: { id: true }, take: 2 })
-  const [account] = accounts
-  if (account !== undefined && accounts.length === 1) {
-    return account.id
-  }
-  throw fail('ACCOUNT_NOT_SET_UP', { kind, several: accounts.length > 1 })
+  return (await onlyAccount(tx, method === 'cash' ? 'cash' : 'bank')).id
 }
 
 export async function collectPayment(deps: AppDeps, input: CollectInput): Promise<CollectPaymentResponse> {

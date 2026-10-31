@@ -34,6 +34,7 @@ export const bsMonthSchema = z.string().refine((value) => {
 }, 'A BS month looks like 2083-07.')
 
 export const recordStatusSchema = z.enum(['posted', 'void_requested', 'voided'])
+export type RecordStatus = z.infer<typeof recordStatusSchema>
 
 export const studentRefSchema = z.object({
   id: idSchema,

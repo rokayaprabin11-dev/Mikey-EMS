@@ -402,7 +402,7 @@ describe('void approval', () => {
       })
       expect(
         errorOf(await requestVoid({ on: days, token: await signIn(days, accountant, COUNTER), ip: COUNTER }, paymentId)),
-      ).toMatchObject({ status: 409, code: 'RECEIPT_ALREADY_VOIDED' })
+      ).toMatchObject({ status: 409, code: 'ALREADY_VOIDED' })
     } finally {
       await days.close()
     }

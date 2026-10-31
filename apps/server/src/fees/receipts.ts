@@ -5,13 +5,7 @@ import type { RequestContext, SessionContext } from '../auth/sessions.ts'
 import type { AppDeps, Db } from '../deps.ts'
 import { fail } from '../errors.ts'
 import { renderReceipt } from '../pdf/receipt.ts'
-
-export function statusOf(payment: { voidRecord: object | null; voidRequests: readonly object[] }): Receipt['status'] {
-  if (payment.voidRecord !== null) {
-    return 'voided'
-  }
-  return payment.voidRequests.length > 0 ? 'void_requested' : 'posted'
-}
+import { recordStatus } from '../record-status.ts'
 
 export async function readReceipt(db: Db, paymentId: string): Promise<Receipt> {
   const row = await db.receipt.findUnique({
@@ -32,7 +26,7 @@ export async function readReceipt(db: Db, paymentId: string): Promise<Receipt> {
   }
   return {
     paymentId,
-    status: statusOf(row.payment),
+    status: recordStatus(row.payment),
     printCount: row._count.prints,
     snapshot: receiptSnapshotSchema.parse(row.snapshot),
   }

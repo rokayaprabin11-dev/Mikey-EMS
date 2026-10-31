@@ -22,10 +22,14 @@ export const accountRefSchema = z.object({
   kind: accountKindSchema,
 })
 
+// A balance can be below zero: a bank expense is not limited by the balance, and opening balances
+// are not entered yet (Q20).
+const balanceSchema = z.int()
+
 export const accountSchema = accountRefSchema.extend({
   bankName: z.string().nullable(),
   accountNoLast4: z.string().regex(/^\d{4}$/).nullable(),
-  balance: paisaSchema,
+  balance: balanceSchema,
 })
 
 export const accountsResponseSchema = z.object({
@@ -134,7 +138,7 @@ export const bookEntrySchema = z.object({
   at: timestampSchema,
   direction: z.enum(['in', 'out']),
   amount: positivePaisaSchema,
-  balance: paisaSchema,
+  balance: balanceSchema,
   source: bookEntrySourceSchema,
 })
 
@@ -145,10 +149,10 @@ export const bookQuerySchema = z.object({
 export const bookResponseSchema = z.object({
   account: accountRefSchema,
   date: adDateSchema,
-  openingBalance: paisaSchema,
+  openingBalance: balanceSchema,
   entries: z.array(bookEntrySchema),
   totals: z.object({ moneyIn: paisaSchema, moneyOut: paisaSchema }),
-  closingBalance: paisaSchema,
+  closingBalance: balanceSchema,
 })
 
 export const CASH_DENOMINATIONS = [1000, 500, 100, 50, 20, 10, 5, 2] as const
@@ -182,7 +186,7 @@ export const dayCloseSchema = z.object({
 
 export const dayCloseStatusSchema = z.object({
   date: adDateSchema,
-  expectedCash: paisaSchema,
+  expectedCash: balanceSchema,
   dayClose: dayCloseSchema.nullable(),
 })
 
@@ -204,3 +208,4 @@ export type BookResponse = z.infer<typeof bookResponseSchema>
 export type DayCloseCreate = z.infer<typeof dayCloseCreateSchema>
 export type DayClose = z.infer<typeof dayCloseSchema>
 export type DayCloseStatus = z.infer<typeof dayCloseStatusSchema>
+export type DayClosesResponse = z.infer<typeof dayClosesResponseSchema>

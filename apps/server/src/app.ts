@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 
+import { registerAccountRoutes } from './accounts/routes.ts'
 import { registerAuthRoutes } from './auth/routes.ts'
 import type { AppDeps } from './deps.ts'
 import { AppError, fail } from './errors.ts'
@@ -37,5 +38,6 @@ export function buildApp(deps: AppDeps, options: { logger: boolean }): FastifyIn
   registerAuthRoutes(app, deps)
   registerConnectionRoutes(app, deps)
   registerFeeRoutes(app, deps)
+  registerAccountRoutes(app, deps)
   return app
 }

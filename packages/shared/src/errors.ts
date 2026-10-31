@@ -43,7 +43,9 @@ export const ERRORS = {
   NO_PERMISSION: { status: 403, en: () => 'You do not have permission to do this. Ask the Super Admin.' },
   NOT_FOUND: {
     status: 404,
-    en: (params: { what: 'address' | 'student' | 'due' | 'receipt' | 'request' | 'computer' }) =>
+    en: (params: {
+      what: 'address' | 'student' | 'due' | 'receipt' | 'request' | 'computer' | 'account' | 'category' | 'entry'
+    }) =>
       ({
         address: 'Computer 1 does not understand this request. Make sure both computers have the same version of Mikey EMS.',
         student: 'This student was not found. Refresh the list and try again.',
@@ -51,6 +53,9 @@ export const ERRORS = {
         receipt: 'This receipt was not found. Refresh the list and try again.',
         request: 'This request was not found. Refresh the list and try again.',
         computer: 'This computer was not found. Refresh the list and try again.',
+        account: 'This cash or bank account was not found. Refresh and try again.',
+        category: 'This category was not found. Refresh and try again.',
+        entry: 'This income or expense was not found. Refresh the list and try again.',
       })[params.what],
   },
   REQUEST_NOT_PENDING: {
@@ -114,12 +119,29 @@ export const ERRORS = {
   },
   VOID_ALREADY_REQUESTED: {
     status: 409,
-    en: () => "A void has already been asked for on this receipt. Wait for the Super Admin's answer.",
+    en: (params: { what: 'receipt' | 'income' | 'expense' }) =>
+      `A void has already been asked for on this ${params.what}. Wait for the Super Admin's answer.`,
   },
-  RECEIPT_ALREADY_VOIDED: { status: 409, en: () => 'This receipt has already been voided. Refresh the list.' },
+  ALREADY_VOIDED: {
+    status: 409,
+    en: (params: { what: 'receipt' | 'income' | 'expense' }) =>
+      `This ${params.what} has already been voided. Refresh the list.`,
+  },
   OWN_VOID_REQUEST: {
     status: 403,
     en: () => 'You asked for this void yourself, so another Super Admin has to approve it.',
+  },
+  INSUFFICIENT_CASH: {
+    status: 422,
+    en: (params: { balance: number; doing: 'expense' | 'transfer' }) =>
+      params.doing === 'expense'
+        ? `Cash in hand is ${formatRupees(params.balance)}. Pay this from the bank, or lower the amount.`
+        : `Cash in hand is ${formatRupees(params.balance)}. Move no more than that to the bank.`,
+  },
+  CATEGORY_INACTIVE: { status: 422, en: () => 'This category is no longer used. Choose another one.' },
+  DAY_ALREADY_CLOSED: {
+    status: 409,
+    en: () => 'Today has already been closed. You can see it under Past day closes.',
   },
   INTERNAL_ERROR: {
     status: 500,

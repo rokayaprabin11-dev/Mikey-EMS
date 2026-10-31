@@ -182,9 +182,10 @@ export const paymentsListResponseSchema = z.object({
 export const VOID_REASONS = ['wrong_student', 'wrong_amount', 'wrong_method', 'other'] as const
 export const voidReasonSchema = z.enum(VOID_REASONS)
 
-// Voids of income and expenses come with step 4d; until then only a payment can be voided.
+export const voidTargetTypeSchema = z.enum(['payment', 'income', 'expense'])
+
 export const voidRequestCreateSchema = z.object({
-  target: z.object({ type: z.literal('payment'), id: idSchema }),
+  target: z.object({ type: voidTargetTypeSchema, id: idSchema }),
   reason: voidReasonSchema,
   details: z.string().trim().min(1).max(500),
 })

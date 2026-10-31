@@ -4,7 +4,7 @@ import { type PaymentListItem, type PaymentsListQuery, type PaymentsListResponse
 import type { SessionContext } from '../auth/sessions.ts'
 import { toDbDate } from '../dates.ts'
 import type { Db } from '../deps.ts'
-import { statusOf } from './receipts.ts'
+import { recordStatus } from '../record-status.ts'
 
 // Status is never stored: voided if a void points at the payment, void requested if a pending
 // request does, otherwise posted.
@@ -66,7 +66,7 @@ export async function listPayments(db: Db, query: PaymentsListQuery, session: Se
         sectionName: snapshot.student.sectionName,
       },
       method: snapshot.method,
-      status: statusOf(row),
+      status: recordStatus(row),
       amount: snapshot.totals.amountPaid,
     }
   })
