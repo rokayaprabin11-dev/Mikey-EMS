@@ -19,7 +19,7 @@ Electron + React + TypeScript (strict) + Tailwind CSS + shadcn/ui + Recharts in 
 
 Also approved: pnpm workspaces, electron-vite, TanStack Query (server data cache only), lucide-react (icons), `@fontsource/anek-latin` and `@fontsource/ibm-plex-sans`, a lookup-table BS date library such as `nepali-date-converter`, an argon2id package for password hashing, `croner` for scheduled jobs, vitest.
 
-Do not add any other runtime dependency without saying why in the PR/commit message and checking that an existing dependency cannot do it. No state-management library, no CSS-in-JS, no ORM besides Prisma, no second UI kit.
+Do not add any other runtime dependency without saying why in the PR/commit message and checking that an existing dependency cannot do it. Pin every dependency to an exact version (no `^` or `~`). No state-management library, no CSS-in-JS, no ORM besides Prisma, no second UI kit.
 
 ## Repository layout
 

@@ -20,6 +20,9 @@ Agents: anything under **Open questions** is not decided. Do not build it, do no
 | D12 | Visual design: per-role sidebar colour, Anek Latin + IBM Plex Sans, tokens in `DESIGN_SYSTEM.md`. | Approved design canvases. |
 | D13 | No payroll and no double-entry screens in the first build. | Not confirmed by the client. |
 | D14 | Receipts show no VAT line. | Education services are VAT-exempt in Nepal. Confirm PAN details with the school. |
+| D15 | Tailwind CSS v4. Design tokens are CSS theme variables in `apps/desktop/src/index.css`, not a `tailwind.config.ts`. | Current Tailwind and shadcn/ui are built for v4. Decided 2026-10-31 by Prabin Rokaya. |
+| D16 | Every dependency is pinned to an exact version (no `^` or `~`). | Repeatable installs. TypeScript is held at 6.x because typescript-eslint does not support 7 yet. Decided 2026-10-31 by Prabin Rokaya. |
+| D17 | Prisma 7, connecting through `@prisma/adapter-pg` and `pg`. | Prisma 7 needs a driver adapter. Decided 2026-10-31 by Prabin Rokaya. |
 
 ## Open questions (confirm with the school before building)
 

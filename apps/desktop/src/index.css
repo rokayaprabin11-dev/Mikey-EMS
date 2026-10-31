@@ -1,0 +1,45 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-*: initial;
+
+  --color-paper: #F2F4F3;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #FAFBFA;
+  --color-ink: #17212B;
+  --color-ink-muted: #5A6672;
+  --color-ink-soft: #3C4752;
+  --color-line: #DDE2E0;
+  --color-line-soft: #EDF0EE;
+  --color-line-strong: #C9D1CE;
+  --color-action: #1F4FD1;
+  --color-action-hover: #163A9C;
+  --color-action-tint: #EAF0FD;
+  --color-chrome-admin: #14233A;
+  --color-chrome-admin-active: #2A3F5F;
+  --color-chrome-accountant: #0F3A31;
+  --color-chrome-accountant-active: #24584B;
+  --color-crest: #8C1D2F;
+  --color-ok: #0E7A55;
+  --color-ok-tint: #E7F4EE;
+  --color-warn: #B54708;
+  --color-warn-tint: #FDF0E3;
+  --color-bad: #B42318;
+  --color-bad-tint: #FDECEA;
+  --color-neutral-tint: #EEF1F0;
+
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Anek Latin', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 14px;
+  }
+}

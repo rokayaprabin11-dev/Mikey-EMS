@@ -1,0 +1,27 @@
+{
+  "name": "@mikey/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mikey EMS desktop app for the school office computers",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build && electron-builder --win --x64",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@fontsource/anek-latin": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
+    "electron-vite": "6.0.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.5"
+  }
+}

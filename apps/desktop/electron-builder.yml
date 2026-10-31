@@ -1,0 +1,10 @@
+appId: MikeySchool.MikeyEMS
+productName: Mikey EMS
+directories:
+  output: release
+files:
+  - out/**
+win:
+  target:
+    - target: nsis
+      arch: x64

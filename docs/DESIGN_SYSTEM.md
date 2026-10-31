@@ -5,6 +5,8 @@ The approved UI designs are on two private design canvases (ask the project owne
 - Super Admin: https://claude.ai/artifact/TobcWYaaT9XBHE6ezwMdFj
 - Accountant: https://claude.ai/artifact/8PmVsHwPVRWYioRgzABN1m
 
+PDF exports of both canvases are in `docs/design/` (`super-admin.pdf`, `accountant.pdf`).
+
 Match them. When a screen is not drawn, compose it from the patterns below instead of inventing a new look.
 
 ## Look in one sentence
@@ -13,7 +15,7 @@ A calm office ledger: grey-paper background, white panels with thin borders, dar
 
 ## Colour tokens
 
-Put these in `tailwind.config.ts` under `theme.extend.colors` and as CSS variables for shadcn. Use tokens, never raw hex in components.
+They are defined once, as Tailwind v4 theme variables in `apps/desktop/src/index.css` (`--color-paper` gives `bg-paper`, `text-paper`, `border-paper`, and so on). Tailwind's default palette is switched off, so these are the only colour classes. Use tokens, never raw hex in components. A test fails if `index.css` and this table differ.
 
 | Token | Hex | Use |
 | --- | --- | --- |
@@ -47,7 +49,7 @@ Rules:
 
 ## Typography
 
-Bundle both fonts locally with `@fontsource`. No internet font loading.
+Bundle both fonts locally with `@fontsource`. No internet font loading. In Tailwind, `font-display` is Anek Latin and `font-sans` (the default) is IBM Plex Sans.
 
 | Role | Font | Size / weight |
 | --- | --- | --- |
@@ -63,7 +65,7 @@ Bundle both fonts locally with `@fontsource`. No internet font loading.
 
 ## Shape and spacing
 
-- Radius: panels 10px, inputs and buttons 8px, small buttons 6px, chips fully rounded.
+- Radius: panels 10px (`rounded-lg`), inputs and buttons 8px (`rounded-md`), small buttons 6px (`rounded-sm`), chips fully rounded (`rounded-full`).
 - No drop shadows except dialogs.
 - Spacing scale (px): 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 28. Page padding 22px top, 28px sides. Gap between panels 20px.
 - Inputs and buttons: 40px high; primary actions 44–56px. Clickable targets at least 32px, 44px for main actions.

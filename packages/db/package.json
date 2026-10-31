@@ -1,0 +1,11 @@
+{
+  "name": "@mikey/db",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "prisma": "7.10.1"
+  }
+}

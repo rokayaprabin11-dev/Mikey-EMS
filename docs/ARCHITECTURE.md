@@ -21,6 +21,7 @@ Computer 1 (Super Admin, server)                     Computer 2 (Accountant)
 
 ## Desktop app (`apps/desktop`)
 
+- Layout: `electron/main` (main process) and `electron/preload` (preload) run in Node; `src/` is the renderer, built by electron-vite from `src/index.html`.
 - Electron with `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
 - The preload exposes a small typed bridge only: `getServerUrl`, `setServerUrl`, `printPdf(bytes, printerName)`, `savePdfOrExcel(bytes, suggestedName)`, `listPrinters`, `appVersion`. Nothing else.
 - Renderer: React + TypeScript + Tailwind + shadcn/ui. Server data is fetched through one typed API client (`src/api/`) that validates responses with Zod from `packages/shared`. Use React's own state and context; keep server data in the API layer's cache (TanStack Query is allowed; no other state library).
@@ -29,6 +30,7 @@ Computer 1 (Super Admin, server)                     Computer 2 (Accountant)
 ## Server (`apps/server`)
 
 - Fastify, TypeScript, Prisma. Routes under `/api/v1`. JSON only.
+- The server and `packages/shared` run as TypeScript directly on Node 24 (type stripping). Relative imports end in `.ts`, type-only imports use `import type`, and enums and namespaces are not allowed (`erasableSyntaxOnly`).
 - Every route declares a Zod schema for params, query, body and response (from `packages/shared`).
 - Every route except `POST /auth/login` and `GET /health` requires a session and a permission key.
 - Errors use one shape:
@@ -97,6 +99,9 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 ## Local development
 
 - PostgreSQL 16 locally (Docker allowed for dev only). `DATABASE_URL` in `apps/server/.env` (never committed; `.env.example` is committed).
+- Copy `apps/server/.env.example` to `apps/server/.env`. `packages/db/prisma.config.ts` reads `DATABASE_URL` from that file.
+- If `ELECTRON_RUN_AS_NODE` is set in your shell (VS Code sets it for its extension processes), Electron starts as plain Node and the window never opens. Unset it before `pnpm dev`.
+- `pnpm build` on Linux needs wine for the NSIS installer step. On Windows it does not.
 - `pnpm db:seed` creates the sample school used in the designs (classes Play Group–Class 10, sample students and payments). Seed data must never run in production builds.
 
 ## Environment variables (server)
