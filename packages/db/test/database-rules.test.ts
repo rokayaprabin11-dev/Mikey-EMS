@@ -51,6 +51,12 @@ function newPayment(overrides: { method?: PaymentMethod; reference?: string | nu
   })
 }
 
+// A receipt that pays off everything owed. The database only checks the snapshot is an object;
+// its contents are checked by receiptSnapshotSchema in packages/shared.
+function receiptAmounts(amountPaisa: bigint) {
+  return { amountPaisa, duesBeforePaisa: amountPaisa, discountPaisa: 0n, balanceAfterPaisa: 0n, snapshot: {} }
+}
+
 beforeAll(async () => {
   const role = await db.role.create({ data: { name: 'super_admin' } })
   const user = await db.user.create({
@@ -91,7 +97,7 @@ beforeAll(async () => {
     data: { paymentId: payment.id, feeDueId: feeDue.id, amountPaisa: 368_000n },
   })
   const receipt = await db.receipt.create({
-    data: { paymentId: payment.id, receiptNo: '2083/84-000001', fiscalYear: '2083/84', seq: 1 },
+    data: { ...receiptAmounts(378_000n), paymentId: payment.id, receiptNo: '2083/84-000001', fiscalYear: '2083/84', seq: 1 },
   })
   const receiptPrint = await db.receiptPrint.create({
     data: { receiptId: receipt.id, printNo: 1, computer: 1, printedById: user.id },
@@ -331,9 +337,47 @@ describe('check constraints on money', () => {
     const payment = await newPayment()
     await expect(
       db.receipt.create({
-        data: { paymentId: payment.id, receiptNo: '2083/84-000009', fiscalYear: '2083/84', seq: 2 },
+        data: { ...receiptAmounts(100_000n), paymentId: payment.id, receiptNo: '2083/84-000009', fiscalYear: '2083/84', seq: 2 },
       }),
     ).rejects.toThrow(/receipts_number_check/)
+  })
+
+  it.each([
+    ['a balance after that is not the dues before minus the amount', { duesBeforePaisa: 150_000n, balanceAfterPaisa: 0n }],
+    ['dues before smaller than the amount', { duesBeforePaisa: 50_000n, balanceAfterPaisa: -50_000n }],
+    ['a negative discount', { discountPaisa: -1n }],
+  ])('refuse a receipt with %s', async (_case, amounts) => {
+    const payment = await newPayment()
+    await expect(
+      db.receipt.create({
+        data: { ...receiptAmounts(100_000n), ...amounts, paymentId: payment.id, receiptNo: '2083/84-000020', fiscalYear: '2083/84', seq: 20 },
+      }),
+    ).rejects.toThrow(/receipts_amounts_check/)
+  })
+
+  it('refuse a receipt for a different amount than its payment', async () => {
+    const payment = await newPayment({ amountPaisa: 100_000n })
+    await expect(
+      db.receipt.create({
+        data: { ...receiptAmounts(90_000n), paymentId: payment.id, receiptNo: '2083/84-000021', fiscalYear: '2083/84', seq: 21 },
+      }),
+    ).rejects.toThrow(/Foreign key constraint/)
+  })
+
+  it('refuse a snapshot that is not an object', async () => {
+    const payment = await newPayment()
+    await expect(
+      db.receipt.create({
+        data: {
+          ...receiptAmounts(100_000n),
+          snapshot: ['not', 'an', 'object'],
+          paymentId: payment.id,
+          receiptNo: '2083/84-000022',
+          fiscalYear: '2083/84',
+          seq: 22,
+        },
+      }),
+    ).rejects.toThrow(/receipts_snapshot_check/)
   })
 
   it('refuse a day close whose difference is not counted minus expected', async () => {

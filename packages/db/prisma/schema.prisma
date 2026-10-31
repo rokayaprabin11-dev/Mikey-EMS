@@ -439,6 +439,7 @@ model Payment {
   voidRecord     VoidRecord?
   accountEntries AccountEntry[]
 
+  @@unique([id, amountPaisa])
   @@index([studentId])
   @@index([paidDate])
   @@map("payments")
@@ -464,18 +465,27 @@ model PaymentAllocation {
   @@map("payment_allocations")
 }
 
+// A receipt is printed only from `snapshot`, so later changes to fee heads, the school profile
+// or the student never change an old receipt. The foreign key on (payment_id, amount_paisa)
+// keeps amount_paisa equal to the payment's amount.
 model Receipt {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentId  String   @unique @map("payment_id") @db.Uuid
-  receiptNo  String   @unique @map("receipt_no")
-  fiscalYear String   @map("fiscal_year")
-  seq        Int
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
-  createdBy  String?  @map("created_by") @db.Uuid
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId         String   @unique @map("payment_id") @db.Uuid
+  receiptNo         String   @unique @map("receipt_no")
+  fiscalYear        String   @map("fiscal_year")
+  seq               Int
+  amountPaisa       BigInt   @map("amount_paisa")
+  duesBeforePaisa   BigInt   @map("dues_before_paisa")
+  discountPaisa     BigInt   @map("discount_paisa")
+  balanceAfterPaisa BigInt   @map("balance_after_paisa")
+  snapshot          Json
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy         String?  @map("created_by") @db.Uuid
 
-  payment Payment        @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  payment Payment        @relation(fields: [paymentId, amountPaisa], references: [id, amountPaisa], onDelete: Restrict)
   prints  ReceiptPrint[]
 
+  @@unique([paymentId, amountPaisa])
   @@unique([fiscalYear, seq])
   @@map("receipts")
 }

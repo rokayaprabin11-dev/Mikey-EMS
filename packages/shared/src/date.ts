@@ -181,3 +181,11 @@ export function kathmanduDate(instant: Date): AdDate {
   const local = new Date(instant.getTime() + KATHMANDU_OFFSET_MS)
   return toAdDate(local.getUTCFullYear(), local.getUTCMonth() + 1, local.getUTCDate())
 }
+
+/** Kathmandu wall-clock time, for example `10:58 AM`. */
+export function formatKathmanduTime(instant: Date): string {
+  const local = new Date(instant.getTime() + KATHMANDU_OFFSET_MS)
+  const hours = local.getUTCHours()
+  const hour = hours % 12 === 0 ? 12 : hours % 12
+  return `${hour}:${twoDigits(local.getUTCMinutes())} ${hours < 12 ? 'AM' : 'PM'}`
+}

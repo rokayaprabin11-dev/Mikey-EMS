@@ -20,6 +20,7 @@ async function health(ip?: string): Promise<unknown> {
 
 describe('health check', () => {
   it('reports the server, the database and Computer 1 itself, and the school once setup has saved it', async () => {
+    await server.db.setting.deleteMany({ where: { key: 'school.profile' } })
     expect(await health()).toEqual({
       server: 'ok',
       db: 'ok',

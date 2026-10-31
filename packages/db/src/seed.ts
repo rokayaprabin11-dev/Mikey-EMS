@@ -7,11 +7,14 @@ import {
   adToBs,
   bsMonthName,
   bsToAd,
+  buildReceiptSnapshot,
   daysInBsMonth,
   fiscalYearOf,
   kathmanduDate,
   parseBsDate,
   PERMISSION_KEYS,
+  type ReceiptLineInput,
+  toPaisaNumber,
 } from '@mikey/shared'
 import { hash } from '@node-rs/argon2'
 
@@ -23,6 +26,8 @@ import { createDb, type PaymentMethod, type Prisma } from './index.ts'
 const SESSION = 2083
 const DEV_PASSWORD = 'mikey-dev-2083'
 const CASH_FLOAT_RUPEES = 20_000
+const SCHOOL_PROFILE = { name: 'Mikey English Medium School', address: null, phone: null, email: null, pan: null }
+const FINE_REASON = 'Late fine, Ashwin 2083'
 
 if (process.env.MIKEY_ALLOW_DEV_SEED !== 'yes') {
   throw new Error('The sample school is for development only. Set MIKEY_ALLOW_DEV_SEED=yes in apps/server/.env to load it.')
@@ -197,7 +202,16 @@ async function main(url: string): Promise<void> {
       exam: randomUUID(),
       device: randomUUID(),
     }
-    const users = { sarita: { id: id.sarita, computer: 1 as const }, bikash: { id: id.bikash, computer: 2 as const } }
+    const users = {
+      sarita: { id: id.sarita, computer: 1 as const, fullName: 'Sarita Shrestha' },
+      bikash: { id: id.bikash, computer: 2 as const, fullName: 'Bikash Maharjan' },
+    }
+    const feeHeads = [
+      { id: id.admission, name: 'Admission', kind: 'once' },
+      { id: id.tuition, name: 'Monthly tuition', kind: 'monthly' },
+      { id: id.annual, name: 'Annual', kind: 'annual' },
+      { id: id.exam, name: 'Exam', kind: 'per_exam' },
+    ] as const
     const passwordHash = await hash(DEV_PASSWORD)
     const sessionStart = bs(1, 15)
 
@@ -218,6 +232,7 @@ async function main(url: string): Promise<void> {
     const studentRows: Prisma.StudentCreateManyInput[] = []
     const enrollmentRows: Prisma.StudentEnrollmentCreateManyInput[] = []
     const guardianRows: Prisma.GuardianCreateManyInput[] = []
+    const receiptStudents = new Map<string, Parameters<typeof buildReceiptSnapshot>[0]['student']>()
 
     function addDue(studentId: string, headId: string, periodLabel: string, billDate: AdDate, dueDate: AdDate, amount: number): DueRow {
       const row = { id: randomUUID(), studentId, headId, periodLabel, billDate, dueDate, amount: rupees(amount), paid: 0n }
@@ -263,6 +278,14 @@ async function main(url: string): Promise<void> {
       enrollmentRows.push({ id: randomUUID(), studentId, sessionId: id.session, sectionId, rollNo: student.roll })
       const [guardianName, relationship, phone] = student.guardian
       guardianRows.push({ id: randomUUID(), studentId, fullName: guardianName, relationship, phone })
+      receiptStudents.set(studentId, {
+        code: student.code,
+        fullName: student.name,
+        className: student.className,
+        sectionName: student.section,
+        rollNo: student.roll,
+        guardianName,
+      })
 
       const isNew = student.plan === 'new_admission'
       const firstMonth = isNew ? adToBs(admittedAd).month : 1
@@ -361,6 +384,54 @@ async function main(url: string): Promise<void> {
     })
 
     payments.sort((a, b) => a.at.getTime() - b.at.getTime())
+
+    // Each receipt prints what the student owed at that moment: the dues billed by then, less the
+    // money taken before it by payments that had not been voided by then.
+    const voidedAt = new Map<string, Date>()
+    for (const row of voids) {
+      if (typeof row.paymentId === 'string' && row.voidedAt instanceof Date) voidedAt.set(row.paymentId, row.voidedAt)
+    }
+    const dueById = new Map(dues.map((due) => [due.id, due]))
+    const headById = new Map<string, (typeof feeHeads)[number]>(feeHeads.map((head) => [head.id, head]))
+    const countsAt = (payment: PlannedPayment, moment: Date): boolean => {
+      const voided = voidedAt.get(payment.id)
+      return payment.at < moment && (voided === undefined || voided > moment)
+    }
+    const paidBefore = (payment: PlannedPayment, target: { dueId?: string; fineId?: string }): bigint =>
+      payments
+        .filter((other) => other.studentId === payment.studentId && countsAt(other, payment.at))
+        .flatMap((other) => other.allocations)
+        .filter((item) => (target.dueId === undefined ? item.fineId === target.fineId : item.dueId === target.dueId))
+        .reduce((sum, item) => sum + item.amount, 0n)
+    const owedBefore = (payment: PlannedPayment): bigint => {
+      const billed = dues.filter((due) => due.studentId === payment.studentId && due.billDate <= payment.paidDate)
+      const fined = fines.filter((fine) => dueById.get(fine.dueId)?.studentId === payment.studentId && fine.createdAt <= payment.at)
+      return (
+        billed.reduce((sum, due) => sum + due.amount - paidBefore(payment, { dueId: due.id }), 0n) +
+        fined.reduce((sum, fine) => sum + fine.amount - paidBefore(payment, { fineId: fine.id }), 0n)
+      )
+    }
+    const receiptLines = (payment: PlannedPayment): ReceiptLineInput[] =>
+      payment.allocations.map((item) => {
+        if (item.fineId !== undefined) {
+          return { kind: 'fine', reason: FINE_REASON, amount: toPaisaNumber(item.amount) }
+        }
+        const due = item.dueId === undefined ? undefined : dueById.get(item.dueId)
+        const head = due === undefined ? undefined : headById.get(due.headId)
+        if (due === undefined || head === undefined) throw new Error('A payment points at no due.')
+        const before = paidBefore(payment, { dueId: due.id })
+        return {
+          kind: 'fee',
+          headName: head.name,
+          monthly: head.kind === 'monthly',
+          periodLabel: due.periodLabel,
+          billDate: due.billDate,
+          amount: toPaisaNumber(item.amount),
+          wasPartPaid: before > 0n,
+          clearsDue: before + item.amount === due.amount,
+        }
+      })
+
     const counters = new Map<string, number>()
     const receiptRows: Prisma.ReceiptCreateManyInput[] = []
     const printRows: Prisma.ReceiptPrintCreateManyInput[] = []
@@ -368,8 +439,38 @@ async function main(url: string): Promise<void> {
       const fiscalYear = fiscalYearOf(adToBs(payment.paidDate))
       const seq = (counters.get(fiscalYear) ?? 0) + 1
       counters.set(fiscalYear, seq)
+      const receiptNo = `${fiscalYear}-${String(seq).padStart(6, '0')}`
+      const amount = payment.allocations.reduce((sum, item) => sum + item.amount, 0n)
+      const duesBefore = owedBefore(payment)
+      const student = receiptStudents.get(payment.studentId)
+      if (student === undefined) throw new Error('A payment points at no student.')
       const receiptId = randomUUID()
-      receiptRows.push({ id: receiptId, paymentId: payment.id, receiptNo: `${fiscalYear}-${String(seq).padStart(6, '0')}`, fiscalYear, seq, createdAt: payment.at })
+      receiptRows.push({
+        id: receiptId,
+        paymentId: payment.id,
+        receiptNo,
+        fiscalYear,
+        seq,
+        amountPaisa: amount,
+        duesBeforePaisa: duesBefore,
+        discountPaisa: 0n,
+        balanceAfterPaisa: duesBefore - amount,
+        snapshot: buildReceiptSnapshot({
+          school: SCHOOL_PROFILE,
+          receiptNo,
+          sessionName: String(SESSION),
+          issuedAt: payment.at,
+          paidDate: payment.paidDate,
+          student,
+          lines: receiptLines(payment),
+          duesBefore: toPaisaNumber(duesBefore),
+          discount: 0,
+          method: payment.method,
+          reference: payment.reference,
+          receivedBy: users[payment.takenBy].fullName,
+        }),
+        createdAt: payment.at,
+      })
       printRows.push({ id: randomUUID(), receiptId, printNo: 1, computer: users[payment.takenBy].computer, printedById: users[payment.takenBy].id, printedAt: payment.at })
     }
 
@@ -496,14 +597,12 @@ async function main(url: string): Promise<void> {
         })
         await tx.user.createMany({
           data: [
-            { id: id.sarita, username: 'sarita.admin', passwordHash, fullName: 'Sarita Shrestha', roleId: id.superAdminRole },
-            { id: id.bikash, username: 'bikash.acc', passwordHash, fullName: 'Bikash Maharjan', roleId: id.accountantRole },
+            { id: id.sarita, username: 'sarita.admin', passwordHash, fullName: users.sarita.fullName, roleId: id.superAdminRole },
+            { id: id.bikash, username: 'bikash.acc', passwordHash, fullName: users.bikash.fullName, roleId: id.accountantRole },
             { id: id.puja, username: 'puja.acc', passwordHash, fullName: 'Puja Khadka', roleId: id.accountantRole, status: 'inactive' },
           ],
         })
-        await tx.setting.create({
-          data: { key: 'school.profile', value: { name: 'Mikey English Medium School', address: null, phone: null, email: null, pan: null } },
-        })
+        await tx.setting.create({ data: { key: 'school.profile', value: SCHOOL_PROFILE } })
         await tx.academicSession.create({ data: { id: id.session, name: String(SESSION), startDate: asDate(sessionStart), isCurrent: true } })
         await tx.schoolClass.createMany({ data: CLASSES.map(([name], index) => ({ id: classIds.get(name) ?? '', name, sortOrder: index + 1 })) })
         await tx.section.createMany({
@@ -514,14 +613,7 @@ async function main(url: string): Promise<void> {
         await tx.student.createMany({ data: studentRows })
         await tx.studentEnrollment.createMany({ data: enrollmentRows })
         await tx.guardian.createMany({ data: guardianRows })
-        await tx.feeHead.createMany({
-          data: [
-            { id: id.admission, name: 'Admission', kind: 'once' },
-            { id: id.tuition, name: 'Monthly tuition', kind: 'monthly' },
-            { id: id.annual, name: 'Annual', kind: 'annual' },
-            { id: id.exam, name: 'Exam', kind: 'per_exam' },
-          ],
-        })
+        await tx.feeHead.createMany({ data: [...feeHeads] })
         await tx.feeStructure.createMany({
           data: CLASSES.flatMap(([name, tuition]) => {
             const classId = classIds.get(name) ?? ''
@@ -534,7 +626,7 @@ async function main(url: string): Promise<void> {
           }),
         })
         await tx.feeDue.createMany({ data: dueRows })
-        await tx.fine.createMany({ data: fines.map((fine) => ({ id: fine.id, feeDueId: fine.dueId, amountPaisa: fine.amount, reason: 'Late fine, Ashwin 2083', createdAt: fine.createdAt })) })
+        await tx.fine.createMany({ data: fines.map((fine) => ({ id: fine.id, feeDueId: fine.dueId, amountPaisa: fine.amount, reason: FINE_REASON, createdAt: fine.createdAt })) })
         await tx.account.createMany({
           data: [
             { id: id.cash, name: 'Cash in hand', kind: 'cash' },

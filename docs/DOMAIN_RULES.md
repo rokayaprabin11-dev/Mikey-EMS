@@ -50,6 +50,9 @@ Flow: find student → show unpaid dues oldest first → tick dues and set amoun
 - Methods: Cash, Bank deposit, Cheque, Fonepay QR, eSewa, Khalti *(setting)*. Every non-cash method requires a reference (voucher no., transaction ID, cheque no. and bank). A cash payment has no reference. **[test]**
 - Cash: the UI computes change to give back; the server stores only the payment amount.
 - Server, in one transaction: lock the fiscal-year receipt counter → check dues are still unpaid → create payment, allocations, receipt, cash/bank entry, audit row → commit. **[test]** two concurrent requests for the same due: one succeeds, one gets 409 `DUE_ALREADY_PAID`.
+- A cancelled due or a waived fine gets 409 `DUE_NOT_OWED`; a due that is not this student's gets 404 `NOT_FOUND`. One refused item refuses the whole payment. **[test]**
+- Cash goes into the one cash account and every other method into the one bank account. With no such account, or more than one, the payment is refused with 422 `ACCOUNT_NOT_SET_UP` (choosing between bank accounts is not built). **[test]**
+- What the receipt shows: **dues before payment** is the student's whole outstanding (all unpaid dues and fines, less discounts already on them) just before this payment; **discount or scholarship** is the discounts on the dues this payment covers, for information; **balance still due** is dues before minus the amount paid. **[test]**
 - Same idempotency key twice → second call returns the first receipt, no new rows. **[test]**
 - The confirm button is disabled from click until the server answers.
 
@@ -58,6 +61,10 @@ Flow: find student → show unpaid dues oldest first → tick dues and set amoun
 - Number format `{fiscalYear}-{6 digits}`: `2083/84-001285`. Sequential with no gaps inside a fiscal year; restarts at `000001` on 1 Shrawan. **[test]**
 - A voided receipt keeps its number. Numbers are never reused.
 - Contents: school name, logo, address, phone, PAN, "Fee receipt", receipt no., BS date with AD, fiscal year, session, student name, ID, class/section, roll, guardian, months covered, itemised heads, dues before payment, discount, amount paid, balance after, amount in words, method and reference, received by, stamp and signature areas. **No VAT line** (education is VAT-exempt).
+- Each receipt keeps a **snapshot** of everything it prints, taken when it is issued (`receipts.snapshot`). Receipt PDFs are drawn only from the snapshot plus the print's own details (time and computer), so renaming a fee head or editing the school or the student never changes an old receipt. **[test]**
+- A line reads `<fee head>, <period>`, ending `(part)` when some of that due is left unpaid, and `(balance)` when it pays the rest of a due paid in part before. A fine shows its reason. "For the months of" names the months of the monthly dues paid, taken from their bill dates, and is left out when there are none.
+- The logo is the placeholder crest from the design until the uploaded logo is stored (Q9, Q22); the snapshot records it as `logo: null`.
+- The first print is the original, marked "Original", and it can be printed once (409 `ALREADY_PRINTED` after that). **[test]** A receipt with more lines than fit on one page continues on a second page that starts with the receipt number.
 - Default paper: A5 portrait *(setting; final printer unconfirmed)*.
 - Reprints are marked "Copy of original — print #N".
 

@@ -26,6 +26,7 @@ export const dueItemSchema = z.discriminatedUnion('kind', [
     periodLabel: z.string(),
     dueDate: adDateSchema,
     amount: paisaSchema,
+    discount: paisaSchema,
     paid: paisaSchema,
     remaining: positivePaisaSchema,
   }),
@@ -35,6 +36,7 @@ export const dueItemSchema = z.discriminatedUnion('kind', [
     feeDueId: idSchema,
     headName: z.string(),
     periodLabel: z.string(),
+    reason: z.string(),
     amount: positivePaisaSchema,
     remaining: positivePaisaSchema,
   }),
@@ -84,29 +86,64 @@ export const receiptLineSchema = z.object({
   clearsDue: z.boolean(),
 })
 
+// Everything printed on a receipt, saved when it is issued. Receipts can never be changed, so a
+// receipt shows the same words and amounts for ever, whatever is renamed or edited later.
+// `version` says which shape a stored snapshot has.
+export const receiptSnapshotSchema = z
+  .object({
+    version: z.literal(1),
+    school: z.object({
+      name: z.string().min(1),
+      address: z.string().nullable(),
+      phone: z.string().nullable(),
+      pan: z.string().nullable(),
+      // Receipts print the built-in placeholder crest until uploaded logos are stored (Q9, Q22).
+      logo: z.null(),
+    }),
+    receiptNo: receiptNoSchema,
+    fiscalYear: fiscalYearSchema,
+    sessionName: sessionNameSchema,
+    issuedAt: timestampSchema,
+    date: z.object({ ad: adDateSchema, bs: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+    student: z.object({
+      code: z.string().min(1),
+      fullName: z.string().min(1),
+      className: z.string().min(1),
+      sectionName: z.string().min(1),
+      rollNo: z.int().positive(),
+      guardianName: z.string().nullable(),
+    }),
+    months: z.string().nullable(),
+    lines: z.array(z.object({ label: z.string().min(1), amount: positivePaisaSchema })).min(1),
+    totals: z.object({
+      duesBefore: paisaSchema,
+      discount: paisaSchema,
+      amountPaid: positivePaisaSchema,
+      balanceAfter: paisaSchema,
+    }),
+    amountInWords: z.string().min(1),
+    method: paymentMethodSchema,
+    reference: z.string().nullable(),
+    receivedBy: z.string().min(1),
+  })
+  .refine((snapshot) => snapshot.lines.reduce((sum, line) => sum + line.amount, 0) === snapshot.totals.amountPaid, {
+    error: 'The lines do not add up to the amount paid.',
+    path: ['totals', 'amountPaid'],
+  })
+  .refine((snapshot) => snapshot.totals.balanceAfter === snapshot.totals.duesBefore - snapshot.totals.amountPaid, {
+    error: 'The balance after is not the dues before minus the amount paid.',
+    path: ['totals', 'balanceAfter'],
+  })
+  .refine((snapshot) => snapshot.receiptNo.startsWith(`${snapshot.fiscalYear}-`), {
+    error: 'The receipt number belongs to another fiscal year.',
+    path: ['receiptNo'],
+  })
+
 export const receiptSchema = z.object({
   paymentId: idSchema,
-  receiptNo: receiptNoSchema,
-  fiscalYear: fiscalYearSchema,
-  sessionName: sessionNameSchema,
-  issuedAt: timestampSchema,
-  paidDate: adDateSchema,
-  student: studentRefSchema.extend({
-    code: z.string(),
-    rollNo: z.int().positive(),
-    guardianName: z.string(),
-  }),
-  lines: z.array(receiptLineSchema).min(1),
-  duesBefore: paisaSchema,
-  discount: paisaSchema,
-  amountPaid: positivePaisaSchema,
-  balanceAfter: paisaSchema,
-  method: paymentMethodSchema,
-  reference: z.string().nullable(),
-  receivedBy: z.string(),
-  computer: z.literal([1, 2]),
   status: recordStatusSchema,
   printCount: countSchema,
+  snapshot: receiptSnapshotSchema,
 })
 
 export const collectPaymentResponseSchema = z.object({
@@ -181,6 +218,7 @@ export type DueItem = z.infer<typeof dueItemSchema>
 export type StudentDuesResponse = z.infer<typeof studentDuesResponseSchema>
 export type CollectPaymentRequest = z.infer<typeof collectPaymentRequestSchema>
 export type ReceiptLine = z.infer<typeof receiptLineSchema>
+export type ReceiptSnapshot = z.infer<typeof receiptSnapshotSchema>
 export type Receipt = z.infer<typeof receiptSchema>
 export type CollectPaymentResponse = z.infer<typeof collectPaymentResponseSchema>
 export type PaymentsListQuery = z.infer<typeof paymentsListQuerySchema>

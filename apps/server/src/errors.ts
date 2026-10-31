@@ -1,4 +1,4 @@
-import type { ErrorBody } from '@mikey/shared'
+import { type ErrorBody, formatRupees } from '@mikey/shared'
 
 export class AppError extends Error {
   readonly status: number
@@ -68,6 +68,42 @@ export const errors = {
       'CONNECTION_REQUESTS_FULL',
       'Computer 1 has too many requests waiting. Ask the Super Admin to answer them first.',
     ),
+  dueNotFound: () =>
+    new AppError(404, 'NOT_FOUND', 'One of the chosen dues was not found for this student. Refresh the dues and try again.'),
+  dueNotOwed: (label: string) =>
+    new AppError(
+      409,
+      'DUE_NOT_OWED',
+      `${label} is no longer owed: it was cancelled, or the fine was waived. Refresh the dues and try again.`,
+    ),
+  dueAlreadyPaid: (label: string) =>
+    new AppError(
+      409,
+      'DUE_ALREADY_PAID',
+      `${label} has already been paid, perhaps at the other counter. Refresh the dues and try again.`,
+    ),
+  amountExceedsDue: (label: string, amount: number, remaining: number) =>
+    new AppError(
+      422,
+      'AMOUNT_EXCEEDS_DUE',
+      `${formatRupees(amount)} is more than the ${formatRupees(remaining)} still due on ${label}. Advance payments are not taken.`,
+      { remaining },
+    ),
+  accountNotSetUp: (message: string) => new AppError(422, 'ACCOUNT_NOT_SET_UP', message),
+  studentNotInClass: () =>
+    new AppError(
+      422,
+      'STUDENT_NOT_IN_CLASS',
+      'This student is not in any class, so a receipt cannot show their class. Ask the Super Admin to put them in one.',
+    ),
+  schoolNotSetUp: () =>
+    new AppError(
+      422,
+      'SCHOOL_NOT_SET_UP',
+      'The school name has not been saved on Computer 1 yet, so receipts cannot be made. Finish Computer 1 setup first.',
+    ),
+  alreadyPrinted: () =>
+    new AppError(409, 'ALREADY_PRINTED', 'The original of this receipt has already been printed. Print a copy instead.'),
   internal: () =>
     new AppError(
       500,

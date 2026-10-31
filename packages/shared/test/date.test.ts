@@ -10,6 +10,7 @@ import {
   formatBsDate,
   formatBsDateLong,
   formatBsWithAd,
+  formatKathmanduTime,
   InvalidDateError,
   kathmanduDate,
   parseBsDate,
@@ -145,5 +146,16 @@ describe('kathmanduDate', () => {
   it('starts the business day at midnight in Kathmandu (UTC+05:45)', () => {
     expect(kathmanduDate(new Date('2026-10-30T18:14:59.999Z'))).toBe('2026-10-30')
     expect(kathmanduDate(new Date('2026-10-30T18:15:00.000Z'))).toBe('2026-10-31')
+  })
+})
+
+describe('formatKathmanduTime', () => {
+  it.each([
+    ['2026-10-31T05:13:00.000Z', '10:58 AM'],
+    ['2026-10-31T06:15:00.000Z', '12:00 PM'],
+    ['2026-10-31T10:05:00.000Z', '3:50 PM'],
+    ['2026-10-30T18:15:00.000Z', '12:00 AM'],
+  ])('shows %s as %s in Kathmandu', (instant, time) => {
+    expect(formatKathmanduTime(new Date(instant))).toBe(time)
   })
 })

@@ -86,7 +86,8 @@ The allow list is extra protection only. Sign-in and permissions remain the real
 ### Concurrency
 
 - Money writes run in a single Prisma interactive transaction (`SERIALIZABLE` not needed; use row locks).
-- The receipt counter row for the fiscal year is locked with `SELECT … FOR UPDATE` inside the payment transaction.
+- The receipt counter row for the fiscal year is locked with `SELECT … FOR UPDATE` inside the payment transaction. The payment then locks the student's row; anything else that changes what a student owes (voids, discounts, fine waivers) locks that row too.
+- Printing the original locks the receipt row, so two counters printing at once cannot both get it.
 - Idempotency: `payments.idempotency_key` is unique. On conflict, return the existing payment and receipt with HTTP 200.
 - Editable non-financial records (students, staff, settings, fee structure) carry an integer `version`. Updates send the version they read; mismatch → 409 `STALE_RECORD`, and the UI shows the "someone else changed this" state.
 
@@ -123,6 +124,7 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 ## Printing and exports
 
 - Receipts and report PDFs are generated on the server with PDFKit from the same data the screen shows, and returned as bytes. The desktop previews and prints them through the preload bridge.
+- A receipt PDF is drawn only from the receipt's snapshot (DOMAIN_RULES.md §5), at the sizes of the A5 receipt in the Accountant design. PDFs embed the desktop's fonts (IBM Plex Sans, Anek Latin) from the `@fontsource` WOFF files; fontkit cannot subset some glyphs from the WOFF2 files. Printed words live in `packages/shared/src/i18n/print.en.ts`.
 - Excel exports use ExcelJS on the server.
 - Reprints are stamped "Copy of original — print #N"; the server increments the count.
 
@@ -136,7 +138,7 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 - `pnpm db:migrate` applies migrations and regenerates the Prisma client.
 - `pnpm db:seed` loads the sample school from the designs into an empty database. Sign in as `sarita.admin` (Super Admin) or `bikash.acc` (Accountant) with the password `mikey-dev-2083`. It refuses to run unless `MIKEY_ALLOW_DEV_SEED=yes` and the database has no users. Never set that variable on Computer 1, and the server installer must not ship the seed.
 - To start the dev database again: `pnpm --filter @mikey/db exec prisma migrate reset` (it asks first), then `pnpm db:seed`.
-- `pnpm test` needs the dev database running. Before each run the database tests drop and recreate `mikeyems_test`, and the server tests `mikeyems_test_server`. Nothing is ever truncated, and no test or seed switches a trigger off. The server tests call the API in-process with a clock they move forward, so no port is opened.
+- `pnpm test` needs the dev database running. Before each run the database tests drop and recreate `mikeyems_test`, and the server tests `mikeyems_test_server`. Nothing is ever truncated, and no test or seed switches a trigger off. The server tests call the API in-process with a clock they move forward, so no port is opened. Server test files share one database (school profile, accounts, receipt counters), so they run one file at a time.
 
 ## Environment variables (server)
 
