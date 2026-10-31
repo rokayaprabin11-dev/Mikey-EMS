@@ -21,7 +21,7 @@ Conventions:
 
 | Table | Key columns | Notes |
 | --- | --- | --- |
-| `users` | username (unique), password_hash, full_name, role_id, status, last_login_at, failed_logins, locked_until, version | `failed_logins` is the number of wrong passwords counted towards the current lock (ARCHITECTURE.md, Sessions and auth); sign-in bookkeeping does not change `version` |
+| `users` | username (unique), password_hash, full_name, role_id, status, last_login_at, locked_until, version | Usernames are stored trimmed and lowercase (check) and are unique whatever their case (unique index on `lower(username)`). Wrong passwords are counted from `audit_logs` (ARCHITECTURE.md, Sessions and auth). Sign-in bookkeeping does not change `version` |
 | `roles` | name (`super_admin`, `accountant`) | Fixed rows |
 | `role_permissions` | role_id, permission_key | Unique pair. Keys from `packages/shared/src/permissions.ts` |
 | `sessions` | user_id, token_hash (unique), computer, last_seen_at, expires_at | |
@@ -88,7 +88,7 @@ The Accountant build only reads these.
 
 | Table | Key columns | Notes |
 | --- | --- | --- |
-| `audit_logs` | at, user_id?, computer, action, area, record_type?, record_id?, summary, before (jsonb)?, after (jsonb)? | Insert only |
+| `audit_logs` | at, user_id?, computer, action, area, record_type?, record_id?, summary, before (jsonb)?, after (jsonb)? | Insert only. Index on (user_id, action, at) for the wrong-password count |
 | `backups` *(later)* | taken_at, kind (`scheduled`, `manual`, `day_close`, `pre_restore`), file_name, size_bytes, verified, cloud_status (`queued`, `uploaded`, `failed`), cloud_attempts, cloud_uploaded_at? | |
 | `settings` | key (PK), value (jsonb), version | School profile, receipt, network, language, backup schedule |
 | `connection_requests` | ip (`inet`), computer_name, requested_at, last_seen_at, status (`pending`, `allowed`, `declined`, `expired`), decided_by?, decided_at? | At most one pending request per IP (partial unique index); a repeat request refreshes it, but never reopens a declined one ("Ask again" starts a new request). Pending requests expire after 24 hours. See ARCHITECTURE.md, Allowed computers |

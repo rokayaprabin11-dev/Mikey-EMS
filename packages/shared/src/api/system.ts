@@ -9,6 +9,7 @@ export const healthResponseSchema = z.discriminatedUnion('db', [
     server: z.literal('ok'),
     db: z.literal('ok'),
     device: z.enum(['connected', 'not_responding', 'none']),
+    lastSyncAt: timestampSchema.nullable(),
     cloudBackup: z.enum(['uploaded', 'waiting', 'failed', 'not_set_up']),
     allowed: z.boolean(),
     time: timestampSchema,

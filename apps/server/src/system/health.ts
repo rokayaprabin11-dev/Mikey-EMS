@@ -22,6 +22,11 @@ function deviceStatus(devices: readonly DevicePulls[]): 'connected' | 'not_respo
   return devices.every(lastPullWorked) ? 'connected' : 'not_responding'
 }
 
+function latestPull(devices: readonly DevicePulls[]): string | null {
+  const times = devices.flatMap((device) => (device.lastSyncAt === null ? [] : [device.lastSyncAt.getTime()]))
+  return times.length === 0 ? null : new Date(Math.max(...times)).toISOString()
+}
+
 export function registerHealthRoute(app: FastifyInstance, deps: AppDeps): void {
   registerRoute(app, deps, 'health', async ({ ip, now, log }) => {
     const time = now.toISOString()
@@ -35,13 +40,18 @@ export function registerHealthRoute(app: FastifyInstance, deps: AppDeps): void {
 
     const [allowed, devices, profile] = await Promise.all([
       isAllowedComputer(deps.db, ip),
-      deps.db.device.findMany({ where: { status: 'active' }, select: { lastSyncAt: true, lastSuccessAt: true } }),
+      // Nothing is connected to a file import, so only devices pulled over a connection count.
+      deps.db.device.findMany({
+        where: { status: 'active', connection: { not: 'file' } },
+        select: { lastSyncAt: true, lastSuccessAt: true },
+      }),
       readSetting(deps.db, 'school.profile', schoolProfileSchema),
     ])
     return {
       server: 'ok',
       db: 'ok',
       device: deviceStatus(devices),
+      lastSyncAt: latestPull(devices),
       // Cloud backup is set up on Computer 1 by a later build; until then nothing is set up.
       cloudBackup: 'not_set_up',
       allowed,

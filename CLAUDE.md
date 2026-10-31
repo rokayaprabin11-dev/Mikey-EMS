@@ -8,3 +8,4 @@
 - Prefer small, reviewable diffs. One concern per change.
 - When unsure whether something is in scope, check `docs/DECISIONS.md` (Open questions). If it is listed there, ask instead of building.
 - Never run destructive commands against a database you did not create in this session (`prisma migrate reset`, `DROP`, `pg_restore --clean`).
+- Never stop a process you did not start in this session. Record the PID of every process you start, and stop your own only by that PID (no `pkill -f`, `killall` or name patterns).

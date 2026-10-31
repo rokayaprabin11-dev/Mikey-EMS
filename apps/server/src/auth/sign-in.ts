@@ -27,6 +27,7 @@ export async function signIn(deps: AppDeps, request: LoginRequest, context: Requ
   const user = await db.user.findUnique({ where: { username: request.username }, include: { role: true } })
   const passwordOk = await checkPassword(user?.passwordHash ?? null, request.password)
 
+  // The typed text is never stored: it may be a password typed into the wrong box.
   if (user === null) {
     await writeAudit(db, {
       at: now,
@@ -34,7 +35,7 @@ export async function signIn(deps: AppDeps, request: LoginRequest, context: Requ
       computer,
       action: SIGN_IN_FAILED,
       area: 'Sign-in',
-      summary: `Failed sign-in with unknown username "${request.username}"`,
+      summary: `Sign-in with unknown username on Computer ${computer} (${context.ip})`,
     })
     throw errors.wrongCredentials()
   }
@@ -75,11 +76,10 @@ export async function signIn(deps: AppDeps, request: LoginRequest, context: Requ
         where: { userId: user.id, action: SIGN_IN_FAILED, at: { gt: windowStart, lte: now } },
       })
       if (failures < LOCK_AFTER_WRONG_PASSWORDS) {
-        await tx.user.update({ where: { id: user.id }, data: { failedLogins: failures } })
         return { result: 'wrong_password' }
       }
       const until = new Date(now.getTime() + LOCK_MINUTES * MINUTE)
-      await tx.user.update({ where: { id: user.id }, data: { failedLogins: failures, lockedUntil: until } })
+      await tx.user.update({ where: { id: user.id }, data: { lockedUntil: until } })
       await writeAudit(
         tx,
         audit('auth.locked', `${user.username} was locked for ${LOCK_MINUTES} minutes after ${failures} wrong passwords`),
@@ -102,7 +102,7 @@ export async function signIn(deps: AppDeps, request: LoginRequest, context: Requ
         expiresAt: new Date(now.getTime() + SESSION_HOURS * 60 * MINUTE),
       },
     })
-    await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: now, failedLogins: 0, lockedUntil: null } })
+    await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: now, lockedUntil: null } })
     await writeAudit(tx, audit('auth.signed_in', `${user.fullName} signed in on Computer ${computer}`))
     return { result: 'signed_in', token, permissions: await permissionsOf(tx, user.roleId) }
   })

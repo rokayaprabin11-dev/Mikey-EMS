@@ -215,6 +215,23 @@ describe('partial unique indexes', () => {
   })
 })
 
+describe('usernames', () => {
+  it('are stored trimmed and lowercase', async () => {
+    const roleId = (await db.user.findUniqueOrThrow({ where: { id: f.userId } })).roleId
+    for (const username of ['Test.Upper', ' test.padded', '']) {
+      await expect(
+        db.user.create({ data: { username, passwordHash: 'not used', fullName: 'Test', roleId } }),
+      ).rejects.toThrow(/users_username_check/)
+    }
+  })
+
+  it('are unique whatever their case', async () => {
+    const rows = await db.$queryRaw<{ indexdef: string }[]>`
+      SELECT indexdef FROM pg_indexes WHERE indexname = 'users_username_lower_key'`
+    expect(rows).toEqual([{ indexdef: expect.stringMatching(/UNIQUE INDEX .* \(lower\(username\)\)/) as unknown }])
+  })
+})
+
 const permanentTables = [
   ['payments', () => f.paymentId],
   ['payment_allocations', () => f.allocationId],

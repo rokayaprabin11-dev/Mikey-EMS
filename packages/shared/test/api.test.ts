@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { dayCloseCreateSchema, transferCreateSchema } from '../src/api/accounts.ts'
+import { loginRequestSchema } from '../src/api/auth.ts'
 import { bsMonthSchema, errorBodySchema } from '../src/api/common.ts'
 import { endpoints } from '../src/api/contract.ts'
 import { collectPaymentRequestSchema, PAYMENT_METHODS, voidRequestCreateSchema } from '../src/api/fees.ts'
@@ -145,7 +146,8 @@ describe('health check', () => {
   const health = {
     server: 'ok',
     db: 'ok',
-    device: 'none',
+    device: 'connected',
+    lastSyncAt: '2026-10-31T04:55:00.000Z',
     cloudBackup: 'not_set_up',
     allowed: false,
     time: '2026-10-31T04:15:12.000Z',
@@ -163,10 +165,25 @@ describe('health check', () => {
     expect(healthResponseSchema.safeParse({ ...health, serverName: undefined }).success).toBe(false)
   })
 
+  it('says when the device was last pulled, or nothing when there is no device', () => {
+    expect(healthResponseSchema.safeParse({ ...health, device: 'none', lastSyncAt: null }).success).toBe(true)
+    expect(healthResponseSchema.safeParse({ ...health, lastSyncAt: undefined }).success).toBe(false)
+  })
+
   it('sends only the clock and the server name when the database is down', () => {
     const down = { server: 'ok', db: 'down', time: health.time, serverName: health.serverName }
     expect(healthResponseSchema.parse({ ...down, allowed: true })).toEqual(down)
     expect(healthResponseSchema.safeParse({ ...down, serverName: undefined }).success).toBe(false)
+  })
+})
+
+describe('signing in', () => {
+  it('reads the username without spaces around it and in lowercase', () => {
+    expect(loginRequestSchema.parse({ username: '  Bikash.ACC ', password: 'x' })).toEqual({
+      username: 'bikash.acc',
+      password: 'x',
+    })
+    expect(loginRequestSchema.safeParse({ username: '   ', password: 'x' }).success).toBe(false)
   })
 })
 

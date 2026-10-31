@@ -49,9 +49,13 @@ describe('signing in', () => {
     })
     expect(await server.db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
       lastLoginAt: server.now(),
-      failedLogins: 0,
     })
     expect(await auditCounts(user)).toEqual({ 'auth.signed_in': 1 })
+  })
+
+  it('treats the username as case-insensitive and ignores spaces around it', async () => {
+    const user = await createUser(server.db, 'accountant')
+    expect((await login({ ...user, username: `  ${user.username.toUpperCase()} ` }, PASSWORD)).statusCode).toBe(200)
   })
 
   it('gives the same answer for an unknown username and a wrong password', async () => {
@@ -62,8 +66,20 @@ describe('signing in', () => {
     expect(unknown).toEqual({ status: 401, code: 'WRONG_USERNAME_OR_PASSWORD', message: wrong.message })
     expect(wrong.code).toBe('WRONG_USERNAME_OR_PASSWORD')
     expect(await auditCounts(user)).toEqual({ 'auth.sign_in_failed': 1 })
-    const unknownRow = await server.db.auditLog.findFirst({ where: { summary: { contains: '"nobody.here"' } } })
-    expect(unknownRow).toMatchObject({ userId: null, action: 'auth.sign_in_failed' })
+  })
+
+  it('records an unknown username with the computer and its address, never the typed text', async () => {
+    await allowComputer(server.db, '192.168.1.62', admin)
+    const typed = { ...admin, username: 'Secret-Pass-2083' }
+    expect(errorOf(await login(typed, PASSWORD, '192.168.1.62')).code).toBe('WRONG_USERNAME_OR_PASSWORD')
+
+    const rows = await server.db.auditLog.findMany({
+      where: { summary: 'Sign-in with unknown username on Computer 2 (192.168.1.62)' },
+    })
+    expect(rows).toMatchObject([{ userId: null, action: 'auth.sign_in_failed', computer: 2, before: null, after: null }])
+    expect(
+      await server.db.auditLog.count({ where: { summary: { contains: 'secret-pass', mode: 'insensitive' } } }),
+    ).toBe(0)
   })
 
   it('refuses a computer that is not allowed, and records Computer 2 once it is', async () => {
@@ -86,7 +102,6 @@ describe('signing in', () => {
       message: 'Too many wrong passwords. Try again in 10 minutes.',
     })
     expect(await server.db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
-      failedLogins: 5,
       lockedUntil: new Date(server.now().getTime() + 10 * 60_000),
     })
 
@@ -96,10 +111,7 @@ describe('signing in', () => {
     server.advanceMinutes(0.5)
     expect((await login(user, PASSWORD)).statusCode).toBe(200)
 
-    expect(await server.db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
-      failedLogins: 0,
-      lockedUntil: null,
-    })
+    expect(await server.db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({ lockedUntil: null })
     expect(await auditCounts(user)).toEqual({
       'auth.sign_in_failed': 5,
       'auth.locked': 1,
@@ -128,7 +140,6 @@ describe('signing in', () => {
     expect((await login(user, PASSWORD)).statusCode).toBe(200)
     server.advanceMinutes(1)
     expect(errorOf(await login(user, 'not-the-password')).code).toBe('WRONG_USERNAME_OR_PASSWORD')
-    expect(await server.db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({ failedLogins: 1 })
   })
 
   it('counts wrong passwords sent all at once one by one, so only four get a second try', async () => {

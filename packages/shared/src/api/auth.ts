@@ -3,8 +3,12 @@ import { z } from 'zod'
 import { permissionKeySchema, roleSchema } from '../permissions.ts'
 import { idSchema } from './common.ts'
 
+// Usernames are case-insensitive: they are trimmed and lowercased wherever they come in, and
+// stored lowercase.
+export const usernameSchema = z.string().trim().toLowerCase().min(1).max(100)
+
 export const loginRequestSchema = z.object({
-  username: z.string().trim().min(1).max(100),
+  username: usernameSchema,
   password: z.string().min(1).max(200),
 })
 

@@ -152,7 +152,6 @@ model User {
   roleId       String       @map("role_id") @db.Uuid
   status       PersonStatus @default(active)
   lastLoginAt  DateTime?    @map("last_login_at") @db.Timestamptz
-  failedLogins Int          @default(0) @map("failed_logins")
   lockedUntil  DateTime?    @map("locked_until") @db.Timestamptz
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
   createdBy    String?      @map("created_by") @db.Uuid
@@ -832,6 +831,7 @@ model AuditLog {
   user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([at])
+  @@index([userId, action, at])
   @@map("audit_logs")
 }
 
