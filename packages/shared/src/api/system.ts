@@ -9,7 +9,9 @@ export const healthResponseSchema = z.discriminatedUnion('db', [
     server: z.literal('ok'),
     db: z.literal('ok'),
     device: z.enum(['connected', 'not_responding', 'none']),
+    // The last pull that brought scans in, and the last time the server tried at all.
     lastSyncAt: timestampSchema.nullable(),
+    lastAttemptAt: timestampSchema.nullable(),
     cloudBackup: z.enum(['uploaded', 'waiting', 'failed', 'not_set_up']),
     allowed: z.boolean(),
     time: timestampSchema,

@@ -139,29 +139,44 @@ export async function collectPayment(deps: AppDeps, input: CollectInput): Promis
     if (school === null) {
       throw errors.schoolNotSetUp()
     }
+    // One table per query, one query after another (CLAUDE.md).
     const student = await tx.student.findUniqueOrThrow({
       where: { id: body.studentId },
-      include: { guardians: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 1 } },
+      select: { studentCode: true, fullName: true },
+    })
+    const guardian = await tx.guardian.findFirst({
+      where: { studentId: body.studentId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { fullName: true },
     })
     const enrollment = await tx.studentEnrollment.findFirst({
       where: { studentId: body.studentId },
       orderBy: { session: { startDate: 'desc' } },
-      include: { session: true, section: { include: { schoolClass: true } } },
+      select: { rollNo: true, sessionId: true, sectionId: true },
     })
     if (enrollment === null) {
       throw errors.studentNotInClass()
     }
+    const academicSession = await tx.academicSession.findUniqueOrThrow({
+      where: { id: enrollment.sessionId },
+      select: { name: true },
+    })
+    const section = await tx.section.findUniqueOrThrow({
+      where: { id: enrollment.sectionId },
+      select: { name: true, classId: true },
+    })
+    const schoolClass = await tx.schoolClass.findUniqueOrThrow({ where: { id: section.classId }, select: { name: true } })
 
     const seq = counter.last_seq + 1
     const receiptNo = `${fiscalYear}-${String(seq).padStart(6, '0')}`
     const amount = planned.allocations.reduce((sum, allocation) => sum + allocation.amountPaisa, 0n)
     const reference = body.reference ?? null
-    const className = enrollment.section.schoolClass.name
-    const sectionName = enrollment.section.name
+    const className = schoolClass.name
+    const sectionName = section.name
     const snapshot = buildReceiptSnapshot({
       school,
       receiptNo,
-      sessionName: enrollment.session.name,
+      sessionName: academicSession.name,
       issuedAt: now,
       paidDate,
       student: {
@@ -170,7 +185,7 @@ export async function collectPayment(deps: AppDeps, input: CollectInput): Promis
         className,
         sectionName,
         rollNo: enrollment.rollNo,
-        guardianName: student.guardians[0]?.fullName ?? null,
+        guardianName: guardian?.fullName ?? null,
       },
       lines: planned.lines,
       duesBefore: toPaisaNumber(ledger.outstanding),

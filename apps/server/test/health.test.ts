@@ -26,6 +26,7 @@ describe('health check', () => {
       db: 'ok',
       device: 'none',
       lastSyncAt: null,
+      lastAttemptAt: null,
       cloudBackup: 'not_set_up',
       allowed: true,
       time: server.now().toISOString(),
@@ -55,28 +56,46 @@ describe('health check', () => {
     expect(await health('192.168.1.30')).toMatchObject({ allowed: false })
   })
 
-  it('reports the fingerprint devices from their last pull, and when that was', async () => {
+  it('reports the fingerprint devices: the last pull that worked, and the last try', async () => {
     await server.db.device.create({
       data: { name: 'Spreadsheet import', connection: 'file', lastSyncAt: new Date('2026-10-31T05:30:00.000Z') },
     })
-    expect(await health()).toMatchObject({ device: 'none', lastSyncAt: null })
+    expect(await health()).toMatchObject({ device: 'none', lastSyncAt: null, lastAttemptAt: null })
 
     const pulled = new Date('2026-10-31T04:55:00.000Z')
     await server.db.device.create({
       data: { name: 'Main gate', connection: 'lan', lastSyncAt: pulled, lastSuccessAt: pulled },
     })
-    expect(await health()).toMatchObject({ device: 'connected', lastSyncAt: '2026-10-31T04:55:00.000Z' })
-
-    const office = await server.db.device.create({
-      data: { name: 'Office', connection: 'lan', lastSyncAt: new Date('2026-10-31T05:05:00.000Z'), lastSuccessAt: pulled },
+    expect(await health()).toMatchObject({
+      device: 'connected',
+      lastSyncAt: '2026-10-31T04:55:00.000Z',
+      lastAttemptAt: '2026-10-31T04:55:00.000Z',
     })
-    expect(await health()).toMatchObject({ device: 'not_responding', lastSyncAt: '2026-10-31T05:05:00.000Z' })
+
+    // The office device last worked at 04:40 and failed again at 05:05.
+    const office = await server.db.device.create({
+      data: {
+        name: 'Office',
+        connection: 'lan',
+        lastSyncAt: new Date('2026-10-31T05:05:00.000Z'),
+        lastSuccessAt: new Date('2026-10-31T04:40:00.000Z'),
+      },
+    })
+    expect(await health()).toMatchObject({
+      device: 'not_responding',
+      lastSyncAt: '2026-10-31T04:40:00.000Z',
+      lastAttemptAt: '2026-10-31T05:05:00.000Z',
+    })
 
     await server.db.device.update({ where: { id: office.id }, data: { status: 'disabled' } })
     expect(await health()).toMatchObject({ device: 'connected', lastSyncAt: '2026-10-31T04:55:00.000Z' })
 
     await server.db.device.create({ data: { name: 'Never pulled', connection: 'usb' } })
-    expect(await health()).toMatchObject({ device: 'not_responding', lastSyncAt: '2026-10-31T04:55:00.000Z' })
+    expect(await health()).toMatchObject({
+      device: 'not_responding',
+      lastSyncAt: null,
+      lastAttemptAt: '2026-10-31T04:55:00.000Z',
+    })
   })
 
   it('says only that the database is down when Computer 1 cannot reach it', async () => {

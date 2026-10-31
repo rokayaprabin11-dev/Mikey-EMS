@@ -35,10 +35,6 @@ export interface StudentLedger {
   outstanding: bigint
 }
 
-function total(rows: readonly { amountPaisa: bigint }[]): bigint {
-  return rows.reduce((sum, row) => sum + row.amountPaisa, 0n)
-}
-
 // A cancelled due or a waived fine is not owed. Overpayment is never taken, so a negative
 // remainder means the records are wrong, and the server says so rather than hide it.
 function remainingOf(what: string, owes: bigint, paid: bigint, owed: boolean): bigint {
@@ -53,30 +49,53 @@ function remainingOf(what: string, owes: bigint, paid: bigint, owed: boolean): b
 }
 
 // What a student owes, from their dues, fines and the money taken against them. A payment's
-// money counts until the payment is voided.
+// money counts until the payment is voided. This runs inside the payment transaction, so it reads
+// one table per query, one query after another (CLAUDE.md).
 export async function readLedger(db: Db, studentId: string): Promise<StudentLedger> {
-  const rows = await db.feeDue.findMany({
+  const dueRows = await db.feeDue.findMany({
     where: { studentId },
-    include: {
-      feeHead: { select: { name: true, kind: true } },
-      allocations: { where: { payment: { voidRecord: { is: null } } }, select: { amountPaisa: true } },
-      fines: {
-        include: { allocations: { where: { payment: { voidRecord: { is: null } } }, select: { amountPaisa: true } } },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      },
-    },
     orderBy: [{ dueDate: 'asc' }, { billDate: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
   })
+  const dueIds = dueRows.map((row) => row.id)
+  const heads = await db.feeHead.findMany({
+    where: { id: { in: [...new Set(dueRows.map((row) => row.feeHeadId))] } },
+    select: { id: true, name: true, kind: true },
+  })
+  const fineRows = await db.fine.findMany({
+    where: { feeDueId: { in: dueIds } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  const takenRows = await db.paymentAllocation.groupBy({
+    by: ['feeDueId', 'fineId'],
+    where: {
+      OR: [{ feeDueId: { in: dueIds } }, { fineId: { in: fineRows.map((row) => row.id) } }],
+      payment: { voidRecord: { is: null } },
+    },
+    _sum: { amountPaisa: true },
+  })
+
+  const headById = new Map(heads.map((head) => [head.id, head]))
+  const taken = new Map<string, bigint>()
+  for (const row of takenRows) {
+    const target = row.feeDueId ?? row.fineId
+    if (target !== null) {
+      taken.set(target, row._sum.amountPaisa ?? 0n)
+    }
+  }
 
   const feeDues: FeeDueBalance[] = []
-  const fines: FineBalance[] = []
-  for (const row of rows) {
-    const paid = total(row.allocations)
+  const dueById = new Map<string, FeeDueBalance>()
+  for (const row of dueRows) {
+    const head = headById.get(row.feeHeadId)
+    if (head === undefined) {
+      throw new Error(`Fee due ${row.id} has no fee head.`)
+    }
+    const paid = taken.get(row.id) ?? 0n
     const owed = row.status !== 'cancelled'
-    feeDues.push({
+    const due: FeeDueBalance = {
       id: row.id,
-      headName: row.feeHead.name,
-      monthly: row.feeHead.kind === 'monthly',
+      headName: head.name,
+      monthly: head.kind === 'monthly',
       periodLabel: row.periodLabel,
       billDate: fromDbDate(row.billDate),
       dueDate: fromDbDate(row.dueDate),
@@ -85,22 +104,30 @@ export async function readLedger(db: Db, studentId: string): Promise<StudentLedg
       paid,
       owed,
       remaining: remainingOf(`Fee due ${row.id}`, row.amountPaisa - row.discountPaisa, paid, owed),
-    })
-    for (const fine of row.fines) {
-      const finePaid = total(fine.allocations)
-      const fineOwed = fine.waivedAt === null
-      fines.push({
-        id: fine.id,
-        feeDueId: row.id,
-        reason: fine.reason,
-        headName: row.feeHead.name,
-        periodLabel: row.periodLabel,
-        amount: fine.amountPaisa,
-        paid: finePaid,
-        owed: fineOwed,
-        remaining: remainingOf(`Fine ${fine.id}`, fine.amountPaisa, finePaid, fineOwed),
-      })
     }
+    feeDues.push(due)
+    dueById.set(row.id, due)
+  }
+
+  const fines: FineBalance[] = []
+  for (const row of fineRows) {
+    const due = dueById.get(row.feeDueId)
+    if (due === undefined) {
+      throw new Error(`Fine ${row.id} has no fee due.`)
+    }
+    const paid = taken.get(row.id) ?? 0n
+    const owed = row.waivedAt === null
+    fines.push({
+      id: row.id,
+      feeDueId: row.feeDueId,
+      reason: row.reason,
+      headName: due.headName,
+      periodLabel: due.periodLabel,
+      amount: row.amountPaisa,
+      paid,
+      owed,
+      remaining: remainingOf(`Fine ${row.id}`, row.amountPaisa, paid, owed),
+    })
   }
   const outstanding = [...feeDues, ...fines].reduce((sum, item) => sum + item.remaining, 0n)
   return { feeDues, fines, outstanding }

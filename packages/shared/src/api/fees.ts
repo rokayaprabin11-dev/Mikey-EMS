@@ -88,7 +88,9 @@ export const receiptLineSchema = z.object({
 
 // Everything printed on a receipt, saved when it is issued. Receipts can never be changed, so a
 // receipt shows the same words and amounts for ever, whatever is renamed or edited later.
-// `version` says which shape a stored snapshot has.
+// `version` says which shape a stored snapshot has. This reader must understand version 1 for
+// ever: a new shape gets a new version and its own reader, and stored snapshots are never
+// rewritten (DECISIONS.md D22).
 export const receiptSnapshotSchema = z
   .object({
     version: z.literal(1),

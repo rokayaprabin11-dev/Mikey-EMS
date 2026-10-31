@@ -148,6 +148,7 @@ describe('health check', () => {
     db: 'ok',
     device: 'connected',
     lastSyncAt: '2026-10-31T04:55:00.000Z',
+    lastAttemptAt: '2026-10-31T04:55:00.000Z',
     cloudBackup: 'not_set_up',
     allowed: false,
     time: '2026-10-31T04:15:12.000Z',
@@ -165,9 +166,12 @@ describe('health check', () => {
     expect(healthResponseSchema.safeParse({ ...health, serverName: undefined }).success).toBe(false)
   })
 
-  it('says when the device was last pulled, or nothing when there is no device', () => {
-    expect(healthResponseSchema.safeParse({ ...health, device: 'none', lastSyncAt: null }).success).toBe(true)
+  it('says when the device was last pulled and last tried, or nothing when there is no device', () => {
+    expect(healthResponseSchema.safeParse({ ...health, device: 'none', lastSyncAt: null, lastAttemptAt: null }).success).toBe(
+      true,
+    )
     expect(healthResponseSchema.safeParse({ ...health, lastSyncAt: undefined }).success).toBe(false)
+    expect(healthResponseSchema.safeParse({ ...health, lastAttemptAt: undefined }).success).toBe(false)
   })
 
   it('sends only the clock and the server name when the database is down', () => {
