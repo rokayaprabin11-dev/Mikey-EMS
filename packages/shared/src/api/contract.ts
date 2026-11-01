@@ -20,7 +20,7 @@ import {
 import { attendanceSummaryQuerySchema, attendanceSummarySchema } from './attendance.ts'
 import { loginRequestSchema, loginResponseSchema, sessionSchema } from './auth.ts'
 import { adDateSchema, idSchema } from './common.ts'
-import { financeDashboardSchema } from './dashboard.ts'
+import { financeDashboardSchema, schoolDashboardSchema } from './dashboard.ts'
 import {
   collectPaymentRequestSchema,
   collectPaymentResponseSchema,
@@ -130,6 +130,12 @@ export const endpoints = {
     path: '/dashboard/finance',
     access: 'dashboard.finance',
     response: financeDashboardSchema,
+  },
+  schoolDashboard: {
+    method: 'GET',
+    path: '/dashboard/school',
+    access: 'dashboard.school',
+    response: schoolDashboardSchema,
   },
 
   searchStudents: {

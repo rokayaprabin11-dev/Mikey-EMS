@@ -56,6 +56,8 @@ export const studentRefSchema = z.object({
   sectionName: z.string(),
 })
 
+export type StudentRef = z.infer<typeof studentRefSchema>
+
 export const errorBodySchema = z.object({
   error: z.object({
     code: errorCodeSchema,

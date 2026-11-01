@@ -147,3 +147,14 @@ Row fields: user (or `system`), computer (1 or 2), action code, area, record typ
 - A student's class, section and roll are those of their latest enrollment, as fee collection uses them. Inactive students are found too, because they can still owe fees.
 - The Accountant sees what the lookup screen shows and nothing more: name, student ID, class, section, roll, status, primary guardian (name, relationship, phone), what they owe item by item, what they paid this session, and every receipt as printed. Date of birth, address and attendance notes are for the Super Admin only. **[test]**
 - What a student owes is the same everywhere: the search, the dashboards and the dues report work it out for many students in one query, the same way as the student's own ledger. **[test]** they agree.
+
+## 12. Dashboards
+
+- One endpoint per role, matching the two Main screens: `GET /dashboard/finance` (`dashboard.finance`, the Accountant's) and `GET /dashboard/school` (`dashboard.school`, the money parts of the Super Admin's; students, staff, attendance, devices, backups and system come with the Super Admin build).
+- Every figure is worked out from the records each time it is asked for. No total is stored or cached.
+- Money taken (today by method, this month, each day of the month, each month of the session) counts the receipts that still stand, as the Payments list does. A waiting void request changes nothing; once a receipt is voided it drops out of its own day. A void of an earlier day's receipt shows in the fee collection report on the day of the void. **[test]**
+- Fees outstanding is what every student owes (§11), with the number of students who owe. Largest dues lists the four students who owe most, item by item.
+- Spent today counts today's expenses that are not voided; the Super Admin also sees this month's income and expenses, not voided.
+- Cash and bank are the balances reply (with `belowZero`). "Close the day" shows the cashbook's expected cash for today and the most recent close.
+- The Accountant sees their own latest five receipts and their own waiting void requests; the Super Admin sees the latest five receipts from anyone, with their lines, and every waiting void request. **[test]** an Accountant asking for the Super Admin's dashboard gets 403.
+

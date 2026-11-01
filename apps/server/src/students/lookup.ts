@@ -2,6 +2,7 @@ import { Prisma } from '@mikey/db'
 import {
   receiptSnapshotSchema,
   type StudentFees,
+  type StudentRef,
   type StudentSearchQuery,
   type StudentSearchResponse,
   type StudentSummary,
@@ -125,6 +126,14 @@ export async function searchStudents(db: Db, query: StudentSearchQuery): Promise
     shown.map((row) => row.id),
   )
   return { students: shown.map((row) => summaryOf(row, guardians.get(row.id), owed.get(row.id) ?? 0n)) }
+}
+
+// The names and classes of several students, for lists that point at them.
+export async function studentRefs(db: Db, studentIds: readonly string[]): Promise<Map<string, StudentRef>> {
+  const rows = await findStudents(db, null, Prisma.sql`AND s.id = ANY(${[...studentIds]}::uuid[])`, null)
+  return new Map(
+    rows.map((row) => [row.id, { id: row.id, fullName: row.full_name, className: row.class_name, sectionName: row.section_name }]),
+  )
 }
 
 // One student as the lookup screen shows them: contacts, what they owe, and every receipt.
