@@ -164,6 +164,23 @@ export const en = {
       `Server ${address}. Checked ${seconds} ${seconds === 1 ? 'second' : 'seconds'} ago.`,
     nothingStored: 'Nothing is stored on this computer. Every save goes straight to the office server.',
   },
+  // The blocking screen once Computer 1 has not answered for 15 seconds.
+  unreachable: {
+    since: (time: string) => `Server unavailable since ${time}`,
+    title: "Can't reach Computer 1",
+    intro:
+      'This computer keeps no records of its own, so nothing can be looked up or saved until the office server answers again.',
+    tryAgain: 'Try again now',
+    trying: (attempt: number) => `Trying again by itself every 5 seconds. Attempt ${attempt}.`,
+    checkThese: 'Check these',
+    checks: [
+      'Computer 1 in the office is switched on and not asleep.',
+      'The network cable is plugged in on both computers, and the switch lights are on.',
+      'After a power cut, wait two minutes for Computer 1 to start its server.',
+      'Still stuck? Ask the Super Admin to open Settings, Office network, on Computer 1.',
+    ],
+    noInternet: 'Internet is not needed. Only the office network between the two computers.',
+  },
   search: {
     label: 'Search students',
     placeholder: 'Student name, ID, roll or guardian phone',

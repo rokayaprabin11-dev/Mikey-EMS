@@ -9,6 +9,7 @@ import { useLink } from './link.tsx'
 import { BUILT_IN, type Screen } from './screens.ts'
 import { Sidebar } from './Sidebar.tsx'
 import { TopBar } from './TopBar.tsx'
+import { Unreachable } from './Unreachable.tsx'
 
 const words = en.frame
 
@@ -45,28 +46,33 @@ export function Frame({ session }: { session: Session }) {
   }, [])
 
   const health = link.last?.check.health
+  const school = health?.db === 'ok' ? health.schoolName : null
   const firstName = session.user.fullName.trim().split(/\s+/)[0] ?? session.user.fullName
   const title =
     screen === 'dashboard' && health !== undefined
       ? words.dashboardTitle(kathmanduHour(new Date(health.time)), firstName)
       : words.screens[screen]
+  const blocked = link.state === 'unavailable' && link.failing !== null ? link.failing : null
 
   return (
-    <div className="flex h-screen bg-paper text-ink">
-      <Sidebar screen={screen} onOpen={setScreen} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar
-          title={title}
-          subtitle={screen === 'dashboard' ? words.dashboardSubtitle : words.counter}
-          user={session.user}
-          searchRef={search}
-          onChooseStudent={() => setScreen('students')}
-          onSignOut={() => void signOut()}
-        />
-        <main className="flex-1 overflow-y-auto px-7 pt-5.5 pb-7">
-          {screen === 'dashboard' ? <Dashboard onOpen={setScreen} /> : <NotBuilt screen={screen} />}
-        </main>
+    <>
+      <div inert={blocked !== null} className="flex h-screen bg-paper text-ink">
+        <Sidebar screen={screen} onOpen={setScreen} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <TopBar
+            title={title}
+            subtitle={screen === 'dashboard' ? words.dashboardSubtitle : words.counter}
+            user={session.user}
+            searchRef={search}
+            onChooseStudent={() => setScreen('students')}
+            onSignOut={() => void signOut()}
+          />
+          <main className="flex-1 overflow-y-auto px-7 pt-5.5 pb-7">
+            {screen === 'dashboard' ? <Dashboard onOpen={setScreen} /> : <NotBuilt screen={screen} />}
+          </main>
+        </div>
       </div>
-    </div>
+      {blocked !== null && <Unreachable link={{ ...link, failing: blocked }} school={school ?? en.appName} />}
+    </>
   )
 }
