@@ -39,6 +39,9 @@ beforeEach(async () => {
 
 afterAll(() => server.close())
 
+// Statuses that rest on a scan from a device; the others (absent, leave, holiday) have none.
+const SCANNED: readonly AttendanceStatus[] = ['P', 'L', 'E', 'I']
+
 // A class of its own for each test, with one student for each status given (undefined: no
 // status computed yet).
 async function classWith(name: string, statuses: readonly (AttendanceStatus | undefined)[], date: string) {
@@ -49,7 +52,13 @@ async function classWith(name: string, statuses: readonly (AttendanceStatus | un
     const student = await createStudent(server.db, { ...school, sectionId: section.id }, `Student of ${name}`)
     if (status !== undefined) {
       await server.db.attendanceDay.create({
-        data: { personType: 'student', personId: student.id, dayDate: new Date(`${date}T00:00:00.000Z`), computedStatus: status },
+        data: {
+          personType: 'student',
+          personId: student.id,
+          dayDate: new Date(`${date}T00:00:00.000Z`),
+          computedStatus: status,
+          firstInAt: SCANNED.includes(status) ? new Date(`${date}T09:50:00+05:45`) : null,
+        },
       })
     }
     students.push(student)
@@ -97,7 +106,7 @@ describe('the attendance summary', () => {
   it('an attendance summary before day close shows no absentees', async () => {
     const { classId } = await classWith('Class 1', ['P', 'L', 'I', 'LV', 'A', undefined], TODAY)
     const result = await summary(TODAY)
-    expect(result).toMatchObject({ date: TODAY, dayClosesAt: '16:00', dayClosed: false, holidayName: null })
+    expect(result).toMatchObject({ date: TODAY, dayClosesAt: '16:00', state: 'open', holidayName: null })
     expect(countsOf(result, classId)).toEqual({
       students: 6,
       onTime: 1,
@@ -111,7 +120,7 @@ describe('the attendance summary', () => {
     expect(result.classes.every((row) => row.absent === 0)).toBe(true)
   })
 
-  it('counts a student with no status, or marked absent, as absent once the day has closed, and corrections win', async () => {
+  it('counts a computed or corrected absence as absent once the day has closed, never a student with no status, and corrections win', async () => {
     const { classId, students } = await classWith('Class 2', ['P', 'A', undefined, 'L', 'A'], YESTERDAY)
     const [, , , late, absent] = students
     await correct(late?.id ?? '', YESTERDAY, 'LV')
@@ -119,7 +128,7 @@ describe('the attendance summary', () => {
     await correct(absent?.id ?? '', YESTERDAY, 'LV')
 
     const result = await summary(YESTERDAY)
-    expect(result.dayClosed).toBe(true)
+    expect(result.state).toBe('closed')
     expect(countsOf(result, classId)).toEqual({
       students: 5,
       onTime: 2,
@@ -127,8 +136,32 @@ describe('the attendance summary', () => {
       leftEarly: 0,
       incomplete: 0,
       onLeave: 1,
-      absent: 2,
-      notScannedYet: 0,
+      absent: 1,
+      notScannedYet: 1,
+    })
+  })
+
+  it('says not_computed, with no absent count, until statuses are computed or when no device has a scan that day', async () => {
+    const nothing = await summary('2026-10-25')
+    expect(nothing.state).toBe('not_computed')
+    expect(nothing.classes.length).toBeGreaterThan(0)
+    expect(nothing.classes.every((row) => row.absent === null && row.notScannedYet === null)).toBe(true)
+
+    // Statuses computed for a day when no device sent a scan say nothing about who was there.
+    const noScans = '2026-10-26'
+    const { classId, students } = await classWith('Class 6', ['A', 'A', undefined], noScans)
+    await correct(students[1]?.id ?? '', noScans, 'LV')
+    const result = await summary(noScans)
+    expect(result.state).toBe('not_computed')
+    expect(countsOf(result, classId)).toEqual({
+      students: 3,
+      onTime: 0,
+      late: 0,
+      leftEarly: 0,
+      incomplete: 0,
+      onLeave: 1,
+      absent: null,
+      notScannedYet: null,
     })
   })
 
@@ -170,15 +203,15 @@ describe('the attendance summary', () => {
         duplicateWindowMinutes: 2,
       },
     })
-    const { classId } = await classWith('Class 5', [undefined], TODAY)
-    expect(await summary(TODAY)).toMatchObject({ dayClosesAt: '15:30', dayClosed: false })
+    const { classId } = await classWith('Class 5', ['A', undefined], TODAY)
+    expect(await summary(TODAY)).toMatchObject({ dayClosesAt: '15:30', state: 'open' })
 
     await at('15:29')
-    expect(countsOf(await summary(TODAY), classId)).toMatchObject({ absent: 0, notScannedYet: 1 })
+    expect(countsOf(await summary(TODAY), classId)).toMatchObject({ absent: 0, notScannedYet: 2 })
     await at('15:30')
     const closed = await summary(TODAY)
-    expect(closed.dayClosed).toBe(true)
-    expect(countsOf(closed, classId)).toMatchObject({ absent: 1, notScannedYet: 0 })
+    expect(closed.state).toBe('closed')
+    expect(countsOf(closed, classId)).toMatchObject({ absent: 1, notScannedYet: 1 })
   })
 })
 
