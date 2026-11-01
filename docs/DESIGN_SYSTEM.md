@@ -15,7 +15,7 @@ A calm office ledger: grey-paper background, white panels with thin borders, dar
 
 ## Colour tokens
 
-They are defined once, as Tailwind v4 theme variables in `apps/desktop/src/index.css` (`--color-paper` gives `bg-paper`, `text-paper`, `border-paper`, and so on). Tailwind's default palette is switched off, so these are the only colour classes. Use tokens, never raw hex in components. A test fails if `index.css` and this table differ.
+They are defined once, as Tailwind v4 theme variables in `apps/desktop/src/index.css` (`--color-paper` gives `bg-paper`, `text-paper`, `border-paper`, and so on). Tailwind's default palette is switched off, so these are the only colours. shadcn/ui's colour names (`primary`, `border`, `ring`, `muted-foreground`, …) are aliases of these tokens in the same file, so a component copied from shadcn/ui shows the school's colours; our own code uses the token names. Use tokens, never raw hex in components. Tests fail if `index.css` and this table differ, if an alias points at anything but a token, or if a colour is written out in the renderer's code. There is no dark theme.
 
 | Token | Hex | Use |
 | --- | --- | --- |
@@ -90,17 +90,19 @@ Bundle both fonts locally with `@fontsource`. No internet font loading. In Tailw
 
 ## Components (shadcn/ui base)
 
+The components live in `apps/desktop/src/components/ui` (DECISIONS D27). Add one from `apps/desktop` with `pnpm dlx shadcn@4.23.0 add <name>`, then give it the variants below and the token names, and keep its `data-slot` names.
+
 | Need | Component | Notes |
 | --- | --- | --- |
-| Buttons | `Button` | Variants: primary (`action`), secondary (white, `line-strong` border), dark (`ink`, for confirm-in-dialog), destructive (`bad`). Labels say the action: "Collect fee", "Save expense", "Approve void" |
-| Inputs | `Input`, `Select`, `Textarea`, `RadioGroup`, `Checkbox` | Label above, help text below in `ink-muted`, error below in `bad` with 2px `bad` border and `aria-invalid` |
+| Buttons | `Button` | Variants: primary (`action`), secondary (white, `line-strong` border), dark (`ink`, for confirm-in-dialog), destructive (`bad`). Sizes: default 40px, `lg` 44px, `xl` 48px with 10px corners. Disabled primary, dark and destructive buttons are `line-strong` with `ink-soft` text. Labels say the action: "Collect fee", "Save expense", "Approve void" |
+| Inputs | `Input`, `Select`, `Textarea`, `RadioGroup`, `Checkbox` | Label above, help text below in `ink-muted`, error below in `bad` with 2px `bad` border and `aria-invalid`. A choice between a few options is a `RadioGroup` of `RadioCard`s: white cards with a round mark at the start, the selected one with a 2px `action` border |
 | Money input | custom `MoneyInput` | "Rs." prefix, right-aligned, tabular, parses with `parseRupees` |
 | BS date input | custom `BsDateInput` | Accepts `2083-07-12`, shows "12 Kartik 2083, 29 Oct 2026" under it, allows day 32 |
 | Tables | `Table` | Header row `surface-muted`, 12.5px `ink-muted`; rows 13.5px with `line-soft` dividers; totals row bold; pagination below |
 | Status chip | `Badge` | Tint background + strong text colour from the status tokens |
 | Segmented control | `ToggleGroup` | Selected = `ink` background, white text |
 | Tabs | `Tabs` | Underline style, selected = `ink` 2px underline |
-| Banners | `Alert` | Icon + bold sentence saying what happened + plain sentence saying what to do + one action button |
+| Banners | `Alert` | Icon + bold sentence saying what happened + plain sentence saying what to do + one action button. Variants `ok`, `warn`, `bad`: the status tint behind the status colour, with the plain sentence in `ink-soft`. A `bad` banner is announced at once (`role="alert"`), the others politely (`role="status"`) |
 | Dialogs | `Dialog` / `AlertDialog` | Confirm money actions and restore. Restore requires typing `RESTORE` |
 | Charts | Recharts | Bars only (no pies). Current period in `action`, others in a muted tint. Always add a text summary |
 

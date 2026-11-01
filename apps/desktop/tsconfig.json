@@ -1,4 +1,6 @@
 {
   "files": [],
-  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }]
+  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }],
+  // Only for the shadcn CLI, which reads it to find where components.json's "@/" folders are.
+  "compilerOptions": { "paths": { "@/*": ["./src/*"] } }
 }

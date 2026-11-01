@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
@@ -44,5 +46,23 @@ describe('colour tokens', () => {
     const documented = documentedTokens(designSystem)
     expect(Object.keys(documented).length).toBeGreaterThan(0)
     expect(cssTokens(css)).toEqual(documented)
+  })
+
+  it("are all that shadcn/ui's colour names point at", () => {
+    const documented = documentedTokens(designSystem)
+    const aliases = [...css.matchAll(/--color-([a-z-]+):\s*([^;]+);/g)].filter(([, , value]) => !value?.startsWith('#'))
+    expect(aliases.map(([, name]) => name)).toContain('primary')
+    for (const [, name, value] of aliases) {
+      const token = /^var\(--color-([a-z-]+)\)$/.exec(value ?? '')?.[1]
+      expect(token !== undefined && token in documented, `--color-${name ?? ''}: ${value ?? ''}`).toBe(true)
+    }
+  })
+
+  it('are the only colours the screens use: no colour is written out in their code', () => {
+    const sourceDir = fileURLToPath(new URL('../src/', import.meta.url))
+    const files = readdirSync(sourceDir, { recursive: true, encoding: 'utf8' }).filter((file) => /\.tsx?$/.test(file))
+    expect(files.length).toBeGreaterThan(0)
+    const withColours = files.filter((file) => /#[0-9A-Fa-f]{3,8}\b|\b(?:rgb|hsl|oklch)\(/.test(readFileSync(join(sourceDir, file), 'utf8')))
+    expect(withColours).toEqual([])
   })
 })
