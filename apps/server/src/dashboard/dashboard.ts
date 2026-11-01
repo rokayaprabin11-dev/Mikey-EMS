@@ -81,6 +81,11 @@ async function collectionByDay(db: Db, from: AdDate, to: AdDate) {
 async function moneyToday(db: Db, today: AdDate, voidRequests: FinanceDashboard['voidRequests']) {
   const day = toDbDate(today)
   const thisMonth = { gte: toDbDate(monthStart(today)), lte: day }
+  const voided = await db.accountEntry.aggregate({
+    where: { entryDate: day, voidRecord: { is: { payment: { is: { paidDate: { lt: day } } } } } },
+    _sum: { amountPaisa: true },
+    _count: { _all: true },
+  })
 
   const collected = await db.payment.aggregate({ where: { paidDate: thisMonth, ...standing }, _sum: { amountPaisa: true } })
   const owed = await outstandingByStudent(db)
@@ -110,6 +115,7 @@ async function moneyToday(db: Db, today: AdDate, voidRequests: FinanceDashboard[
   })
   return {
     date: today,
+    voidsToday: { amount: sumOf(voided._sum.amountPaisa), receiptCount: voided._count._all },
     collectedThisMonth: { amount: sumOf(collected._sum.amountPaisa), bsMonth: bsMonthOf(today), upTo: today },
     feesOutstanding: {
       amount: toPaisaNumber([...owed.values()].reduce((sum, amount) => sum + amount, 0n)),
@@ -189,6 +195,28 @@ export async function financeDashboard(db: Db, session: SessionContext, now: Dat
   }
 }
 
+// This month's tuition: dues of fee heads of the kind monthly billed in the BS month, after
+// discounts, and the money taken against them by payments not voided (fines are not tuition).
+async function tuitionThisMonth(db: Db, today: AdDate): Promise<SchoolDashboard['tuitionThisMonth']> {
+  const { year, month } = adToBs(today)
+  const { from, to } = bsMonthToAdRange(year, month)
+  const dues = await db.feeDue.findMany({
+    where: { billDate: { gte: toDbDate(from), lte: toDbDate(to) }, status: { not: 'cancelled' }, feeHead: { kind: 'monthly' } },
+    select: { id: true, amountPaisa: true, discountPaisa: true },
+  })
+  const taken = await db.paymentAllocation.aggregate({
+    where: { feeDueId: { in: dues.map((due) => due.id) }, payment: { voidRecord: { is: null } } },
+    _sum: { amountPaisa: true },
+  })
+  const billed = dues.reduce((sum, due) => sum + due.amountPaisa - due.discountPaisa, 0n)
+  const collected = taken._sum.amountPaisa ?? 0n
+  return {
+    billed: toPaisaNumber(billed),
+    collected: toPaisaNumber(collected),
+    percent: billed === 0n ? null : Number((collected * 100n) / billed),
+  }
+}
+
 // Each BS month of the current session up to this one, with the money taken in it.
 async function collectionByMonth(db: Db, today: AdDate): Promise<SchoolDashboard['collectionByMonth']> {
   const session = await db.academicSession.findFirst({ where: { isCurrent: true }, select: { startDate: true } })
@@ -234,6 +262,7 @@ export async function schoolDashboard(db: Db, now: Date): Promise<SchoolDashboar
   return {
     ...(await moneyToday(db, today, voidRequests)),
     collectedToday: { ...(await collection(db, { paidDate: day })), lastAt: lastToday?.createdAt.toISOString() ?? null },
+    tuitionThisMonth: await tuitionThisMonth(db, today),
     incomeThisMonth: sumOf(income._sum.amountPaisa),
     expensesThisMonth: sumOf(expenses._sum.amountPaisa),
     collectionByMonth: await collectionByMonth(db, today),

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { User } from '@mikey/db'
 import {
   accountsResponseSchema,
+  bookResponseSchema,
   bsToAd,
   collectPaymentResponseSchema,
   dayCloseStatusSchema,
@@ -30,8 +31,9 @@ import {
 // The Accountant works on Computer 2; the Super Admin on Computer 1.
 const COUNTER = '192.168.1.84'
 
-// A server whose clock is on 5 Magh 2083, 10:00 AM, a day no other test uses.
+// A server whose clock is on 5 Magh 2083, 10:00 AM.
 const TODAY = bsToAd({ year: 2083, month: 10, day: 5 })
+const YESTERDAY = bsToAd({ year: 2083, month: 10, day: 4 })
 const server: TestServer = startTestServer()
 server.advanceMinutes((new Date(`${TODAY}T10:00:00+05:45`).getTime() - server.now().getTime()) / 60_000)
 
@@ -66,20 +68,26 @@ function get(as: { token: string; ip?: string }, path: string) {
   return server.call({ method: 'GET', path, ...as })
 }
 
-function post(as: { token: string; ip?: string }, path: string, body: object) {
-  return server.call({ method: 'POST', path, ...as, body })
+function post(as: { token: string; ip?: string }, path: string, body: object, on = server) {
+  return on.call({ method: 'POST', path, ...as, body })
 }
 
-async function collect(as: { token: string; ip?: string }, rupees: number, method: object = { method: 'cash' }) {
-  const student = await createStudent(server.db, school, 'Kiran Dashboard')
-  const due = await addDue(server.db, school, student.id, { month: 10, rupees: 3550 })
-  server.advanceMinutes(1)
-  const response = await post(as, '/payments', {
+// A Magh tuition due of Rs. 3,550 for a new student, and a payment of `rupees` towards it.
+async function collect(as: { token: string; ip?: string }, rupees: number, method: object = { method: 'cash' }, on = server) {
+  const student = await createStudent(on.db, school, 'Kiran Dashboard')
+  const due = await addDue(on.db, school, student.id, { month: 10, rupees: 3550 })
+  on.advanceMinutes(1)
+  const response = await post(
+    as,
+    '/payments',
+    {
     idempotencyKey: randomUUID(),
     studentId: student.id,
     ...method,
-    allocations: [{ kind: 'fee', feeDueId: due.id, amount: rupees * 100 }],
-  })
+      allocations: [{ kind: 'fee', feeDueId: due.id, amount: rupees * 100 }],
+    },
+    on,
+  )
   expect(response.statusCode, response.body).toBe(200)
   return collectPaymentResponseSchema.parse(response.json()).receipt
 }
@@ -125,6 +133,7 @@ describe('the dashboards', () => {
         { method: 'fonepay', receiptCount: 1, amount: 200_000 },
       ],
     })
+    expect(dashboard.voidsToday).toEqual({ amount: 0, receiptCount: 0 })
     expect(dashboard.collectedThisMonth).toEqual({ amount: 655_000, bsMonth: '2083-10', upTo: TODAY })
     expect(dashboard.collectionByDay).toEqual([{ date: TODAY, amount: 655_000 }])
     expect(dashboard.spentToday).toEqual({ amount: 45_000, entryCount: 1 })
@@ -179,10 +188,46 @@ describe('the dashboards', () => {
       '2083-01', '2083-02', '2083-03', '2083-04', '2083-05', '2083-06', '2083-07', '2083-08', '2083-09', '2083-10',
     ])
     expect(dashboard.collectionByMonth.at(-1)).toEqual({ bsMonth: '2083-10', amount: 575_000 })
+    // Four Magh tuition dues of Rs. 3,550. Rs. 3,550, 1,000 and 1,200 were paid towards them; the
+    // Fonepay Rs. 2,000 was voided, so it does not count. 5,750 of 14,200 is 40% (rounded down).
+    expect(dashboard.tuitionThisMonth).toEqual({ billed: 1_420_000, collected: 575_000, percent: 40 })
     expect(dashboard.latestReceipts[0]).toMatchObject({ receiptNo: receipt.snapshot.receiptNo, takenBy: 'Test Accountant' })
     expect(dashboard.latestReceipts[0]?.lines).toEqual(receipt.snapshot.lines)
     const pending = await server.db.voidRequest.count({ where: { status: 'pending' } })
     expect(dashboard.voidRequests).toHaveLength(pending)
+  })
+
+  it("shows receipts from earlier days voided today, so collected less voids is today's fee movement", async () => {
+    // A receipt taken yesterday on a second server, working in this file's database.
+    const earlierDay = startTestServer()
+    try {
+      earlierDay.advanceMinutes((new Date(`${YESTERDAY}T10:00:00+05:45`).getTime() - earlierDay.now().getTime()) / 60_000)
+      const earlier = await collect({ token: await signIn(earlierDay, accountant, COUNTER), ip: COUNTER }, 2500, { method: 'cash' }, earlierDay)
+      server.advanceMinutes(1)
+      const voided = await post(asAdmin(), '/voids', {
+        target: { type: 'payment', id: earlier.paymentId },
+        reason: 'wrong_student',
+        details: 'Wrong student.',
+      })
+      expect(voided.statusCode, voided.body).toBe(200)
+
+      const dashboard = await financeDashboard()
+      expect(dashboard.voidsToday).toEqual({ amount: 250_000, receiptCount: 1 })
+      let movement = 0
+      for (const accountId of [school.cashId, school.bankId]) {
+        const book = bookResponseSchema.parse((await get(asAccountant(), `/accounts/${accountId}/book?date=${TODAY}`)).json())
+        for (const entry of book.entries) {
+          if (entry.source.type === 'payment') {
+            movement += entry.amount
+          } else if (entry.source.type === 'void' && entry.source.target.type === 'payment') {
+            movement -= entry.amount
+          }
+        }
+      }
+      expect(dashboard.collectedToday.amount - dashboard.voidsToday.amount).toBe(movement)
+    } finally {
+      await earlierDay.close()
+    }
   })
 
   it("does not show the Super Admin's dashboard to the Accountant", async () => {

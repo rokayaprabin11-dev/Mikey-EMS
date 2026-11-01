@@ -41,6 +41,9 @@ const dayCloseNoteSchema = z.object({
 
 const moneyToday = {
   date: adDateSchema,
+  // Receipts from earlier days voided today. Today's own voided receipts are already out of
+  // "Collected today", so collected less these is today's fee movement in cash and bank.
+  voidsToday: z.object({ amount: paisaSchema, receiptCount: countSchema }),
   collectedThisMonth: monthToDateSchema,
   feesOutstanding: z.object({ amount: paisaSchema, studentCount: countSchema }),
   spentToday: z.object({ amount: paisaSchema, entryCount: countSchema }),
@@ -71,6 +74,9 @@ export const financeDashboardSchema = z.object({
 export const schoolDashboardSchema = z.object({
   ...moneyToday,
   collectedToday: collectionSchema.extend({ lastAt: timestampSchema.nullable() }),
+  // This month's tuition dues (fee heads of the kind monthly) after discounts, the money taken
+  // against them by payments not voided, and that as a share rounded down (DOMAIN_RULES §12).
+  tuitionThisMonth: z.object({ billed: paisaSchema, collected: paisaSchema, percent: z.int().min(0).max(100).nullable() }),
   incomeThisMonth: paisaSchema,
   expensesThisMonth: paisaSchema,
   collectionByMonth: z.array(z.object({ bsMonth: bsMonthSchema, amount: paisaSchema })),
