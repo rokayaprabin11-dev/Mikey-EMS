@@ -3,9 +3,7 @@ import {
   formatAdDate,
   formatBsDateLong,
   formatBsWithAd,
-  formatKathmanduTime,
   formatReceiptAmount,
-  kathmanduDate,
   printEn,
   type Report,
 } from '@mikey/shared'
@@ -109,11 +107,7 @@ class ReportLayout extends PdfLayout {
 
   private header(): void {
     const { header } = this.report
-    const generated = new Date(header.generatedAt)
-    const right = [
-      words.period(formatBsWithAd(header.from), formatBsWithAd(header.to)),
-      words.generated(formatBsWithAd(kathmanduDate(generated)), formatKathmanduTime(generated), header.generatedBy),
-    ].join('\n')
+    const right = this.table.lines.join('\n')
     // The school and the title take what they need, up to half the page; the period and the
     // generated line get the rest.
     const textX = LEFT + CREST_WIDTH + 14

@@ -1,4 +1,4 @@
-import { formatKathmanduTime, printEn, type Report } from '@mikey/shared'
+import { formatBsWithAd, formatKathmanduTime, kathmanduDate, printEn, type Report } from '@mikey/shared'
 
 const words = printEn.reports
 
@@ -29,6 +29,8 @@ export interface NetLine {
 
 export interface ReportTable {
   title: string
+  // Under the title: the period, for the dues when what is owed was worked out, and who made it when.
+  lines: readonly string[]
   note: string
   columns: readonly Column[]
   rows: readonly Value[][]
@@ -45,7 +47,23 @@ function amount(header: string, width = 84, total = true): Column {
   return { header, kind: 'amount', width, excelWidth: 16, total }
 }
 
+function headerLines(report: Report): string[] {
+  const { header } = report
+  const generated = new Date(header.generatedAt)
+  const when = formatBsWithAd(kathmanduDate(generated))
+  const time = formatKathmanduTime(generated)
+  return [
+    words.period(formatBsWithAd(header.from), formatBsWithAd(header.to)),
+    ...(report.type === 'dues' ? [words.outstandingAsOf(when, time)] : []),
+    words.generated(when, time, header.generatedBy),
+  ]
+}
+
 export function reportTable(report: Report): ReportTable {
+  return { ...tableOf(report), lines: headerLines(report) }
+}
+
+function tableOf(report: Report): Omit<ReportTable, 'lines'> {
   const title = words.titles[report.type]
   switch (report.type) {
     case 'fee_collection':

@@ -1,12 +1,4 @@
-import {
-  adToBs,
-  formatBsDateLong,
-  formatBsWithAd,
-  formatKathmanduTime,
-  kathmanduDate,
-  printEn,
-  type Report,
-} from '@mikey/shared'
+import { adToBs, formatBsDateLong, printEn, type Report } from '@mikey/shared'
 import ExcelJS from 'exceljs'
 
 import { toDbDate } from '../dates.ts'
@@ -20,7 +12,6 @@ export const RUPEES_FORMAT = '[>=10000000]"Rs. "##\\,##\\,##\\,##0.00;[>=100000]
 const AD_DATE_FORMAT = 'd mmm yyyy'
 const SHARE_FORMAT = '0%'
 
-const HEADER_ROW = 7
 // Excel's paper size number for A4.
 const A4_PAPER = 9
 
@@ -77,13 +68,14 @@ function setCell(cell: ExcelJS.Cell, table: ReportTable, row: readonly Value[], 
 export async function renderReportExcel(report: Report): Promise<Buffer> {
   const table = reportTable(report)
   const { header } = report
-  const generated = new Date(header.generatedAt)
   const workbook = new ExcelJS.Workbook()
   workbook.creator = header.schoolName
-  workbook.created = generated
+  workbook.created = new Date(header.generatedAt)
+  // The school, the title, the lines under it and the note, then a blank row above the headings.
+  const headerRow = 2 + table.lines.length + 3
   // Printed from the spreadsheet, a report fits one A4 page across.
   const sheet = workbook.addWorksheet(table.title, {
-    views: [{ state: 'frozen', ySplit: HEADER_ROW }],
+    views: [{ state: 'frozen', ySplit: headerRow }],
     pageSetup: { paperSize: A4_PAPER, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   })
   sheet.columns = table.columns.map((column) => ({ width: column.excelWidth }))
@@ -92,11 +84,12 @@ export async function renderReportExcel(report: Report): Promise<Buffer> {
   sheet.getCell('A1').font = { bold: true, size: 14 }
   sheet.getCell('A2').value = table.title
   sheet.getCell('A2').font = { bold: true, size: 12 }
-  sheet.getCell('A3').value = words.period(formatBsWithAd(header.from), formatBsWithAd(header.to))
-  sheet.getCell('A4').value = words.generated(formatBsWithAd(kathmanduDate(generated)), formatKathmanduTime(generated), header.generatedBy)
-  sheet.getCell('A5').value = table.note
+  table.lines.forEach((line, index) => {
+    sheet.getCell(3 + index, 1).value = line
+  })
+  sheet.getCell(3 + table.lines.length, 1).value = table.note
 
-  const headings = sheet.getRow(HEADER_ROW)
+  const headings = sheet.getRow(headerRow)
   table.columns.forEach((column, index) => {
     const cell = headings.getCell(index + 1)
     cell.value = column.header
@@ -105,7 +98,7 @@ export async function renderReportExcel(report: Report): Promise<Buffer> {
     cell.alignment = { horizontal: column.kind === 'text' || column.kind === 'bsDate' || column.kind === 'adDate' ? 'left' : 'right' }
   })
 
-  const first = HEADER_ROW + 1
+  const first = headerRow + 1
   table.rows.forEach((row, offset) => {
     const rowNumber = first + offset
     row.forEach((_value, index) => {

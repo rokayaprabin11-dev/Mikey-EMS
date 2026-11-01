@@ -331,9 +331,14 @@ describe('reports', () => {
     const totals = { studentsBilled: 4, studentsOwing: 2, billed: 13_423_000, paid: 12_800_000, outstanding: 623_000 }
     expect(dues.rows).toEqual([{ className: 'Class 7', ...totals }])
     expect(dues.totals).toEqual(totals)
+    // What is still owed is as of when the report was made, and both the workbook and the PDF say so.
+    const asOf = /^Outstanding as of 4 Kartik 2083 \(21 Oct 2026\), 10:\d\d AM$/
     const sheet = await workbook(third, `/reports/xlsx?type=dues&from=${kartikRange.from}&to=${kartikRange.to}`)
-    expect(sheet.getCell('G8').value).toEqual({ formula: 'IF(D8=0,0,E8/D8)', result: 12_800_000 / 13_423_000 })
-    expect(sheet.getCell('D9').value).toEqual({ formula: 'SUM(D8:D8)', result: 134_230 })
+    expect(sheet.getCell('A4').value).toMatch(asOf)
+    expect(sheet.getCell('G9').value).toEqual({ formula: 'IF(D9=0,0,E9/D9)', result: 12_800_000 / 13_423_000 })
+    expect(sheet.getCell('D10').value).toEqual({ formula: 'SUM(D9:D9)', result: 134_230 })
+    const { text } = await pdfText(third, `/reports/pdf?type=dues&from=${kartikRange.from}&to=${kartikRange.to}`)
+    expect(text.split(/[|\n]/)).toContainEqual(expect.stringMatching(asOf))
   })
 
   it('lists the day closes in the period with what was short or over', async () => {
