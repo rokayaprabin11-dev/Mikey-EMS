@@ -177,6 +177,20 @@ describe('the dashboards', () => {
 
   it("gives the Super Admin this month's income and expenses, each month of the session, the latest receipts and every waiting request", async () => {
     const receipt = await collect(asAccountant(), 1200)
+    // A monthly head that is not marked as tuition stays out of the tuition share.
+    const transport = await server.db.feeHead.create({ data: { name: 'Transport', kind: 'monthly' } })
+    const rider = await createStudent(server.db, school, 'Kiran Transport')
+    await server.db.feeDue.create({
+      data: {
+        studentId: rider.id,
+        sessionId: school.sessionId,
+        feeHeadId: transport.id,
+        periodLabel: 'Magh 2083',
+        billDate: new Date(`${bsToAd({ year: 2083, month: 10, day: 1 })}T00:00:00.000Z`),
+        dueDate: new Date(`${bsToAd({ year: 2083, month: 10, day: 15 })}T00:00:00.000Z`),
+        amountPaisa: 150_000n,
+      },
+    })
     const response = await get(asAdmin(), '/dashboard/school')
     expect(response.statusCode, response.body).toBe(200)
     const dashboard = schoolDashboardSchema.parse(response.json())

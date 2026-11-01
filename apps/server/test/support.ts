@@ -164,7 +164,7 @@ export async function ensureSchool(db: PrismaClient): Promise<School> {
   })
   const tuition = await db.feeHead.upsert({
     where: { name: 'Monthly tuition' },
-    create: { name: 'Monthly tuition', kind: 'monthly' },
+    create: { name: 'Monthly tuition', kind: 'monthly', countsAsTuition: true },
     update: {},
   })
   const annual = await db.feeHead.upsert({ where: { name: 'Annual' }, create: { name: 'Annual', kind: 'annual' }, update: {} })

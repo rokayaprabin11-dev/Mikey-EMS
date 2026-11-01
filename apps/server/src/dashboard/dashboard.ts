@@ -194,13 +194,13 @@ export async function financeDashboard(db: Db, session: SessionContext, now: Dat
   }
 }
 
-// This month's tuition: dues of fee heads of the kind monthly billed in the BS month, after
+// This month's tuition: dues of fee heads that count as tuition, billed in the BS month, after
 // discounts, and the money taken against them by payments not voided (fines are not tuition).
 async function tuitionThisMonth(db: Db, today: AdDate): Promise<SchoolDashboard['tuitionThisMonth']> {
   const { year, month } = adToBs(today)
   const { from, to } = bsMonthToAdRange(year, month)
   const dues = await db.feeDue.findMany({
-    where: { billDate: { gte: toDbDate(from), lte: toDbDate(to) }, status: { not: 'cancelled' }, feeHead: { kind: 'monthly' } },
+    where: { billDate: { gte: toDbDate(from), lte: toDbDate(to) }, status: { not: 'cancelled' }, feeHead: { countsAsTuition: true } },
     select: { id: true, amountPaisa: true, discountPaisa: true },
   })
   const taken = await db.paymentAllocation.aggregate({

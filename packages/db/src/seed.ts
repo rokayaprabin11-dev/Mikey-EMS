@@ -208,7 +208,7 @@ async function main(url: string): Promise<void> {
     }
     const feeHeads = [
       { id: id.admission, name: 'Admission', kind: 'once' },
-      { id: id.tuition, name: 'Monthly tuition', kind: 'monthly' },
+      { id: id.tuition, name: 'Monthly tuition', kind: 'monthly', countsAsTuition: true },
       { id: id.annual, name: 'Annual', kind: 'annual' },
       { id: id.exam, name: 'Exam', kind: 'per_exam' },
     ] as const

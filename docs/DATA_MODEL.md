@@ -37,7 +37,7 @@ Conventions:
 
 | Table | Key columns | Notes |
 | --- | --- | --- |
-| `fee_heads` | name (unique), kind (`once`, `monthly`, `annual`, `per_exam`, `optional`), is_active | |
+| `fee_heads` | name (unique), kind (`once`, `monthly`, `annual`, `per_exam`, `optional`), counts_as_tuition, is_active | `counts_as_tuition` (default false) marks the heads whose dues are tuition, for the dashboard's tuition share (DOMAIN_RULES §12) |
 | `fee_structures` | session_id, class_id, fee_head_id, amount_paisa, version | Unique (session, class, head) |
 | `optional_fee_options` *(later)* | fee_head_id, name (`Banepa Chowk route`), amount_paisa | Transport routes, hostel |
 | `student_fee_options` *(later)* | student_id, session_id, optional_fee_option_id, from_date, to_date? | |

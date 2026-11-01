@@ -339,14 +339,16 @@ model Guardian {
 // Fees
 
 model FeeHead {
-  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name      String      @unique
-  kind      FeeHeadKind
-  isActive  Boolean     @default(true) @map("is_active")
-  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz
-  createdBy String?     @map("created_by") @db.Uuid
-  updatedAt DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  version   Int         @default(1)
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String      @unique
+  kind            FeeHeadKind
+  // Dues of this head are tuition, for "71% of Kartik tuition billed" (DOMAIN_RULES §12).
+  countsAsTuition Boolean     @default(false) @map("counts_as_tuition")
+  isActive        Boolean     @default(true) @map("is_active")
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  createdBy       String?     @map("created_by") @db.Uuid
+  updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  version         Int         @default(1)
 
   structures FeeStructure[]
   dues       FeeDue[]

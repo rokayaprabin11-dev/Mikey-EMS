@@ -74,7 +74,7 @@ export const financeDashboardSchema = z.object({
 export const schoolDashboardSchema = z.object({
   ...moneyToday,
   collectedToday: collectionSchema.extend({ lastAt: timestampSchema.nullable() }),
-  // This month's tuition dues (fee heads of the kind monthly) after discounts, the money taken
+  // This month's tuition dues (fee heads that count as tuition) after discounts, the money taken
   // against them by payments not voided, and that as a share rounded down (DOMAIN_RULES §12).
   tuitionThisMonth: z.object({ billed: paisaSchema, collected: paisaSchema, percent: z.int().min(0).max(100).nullable() }),
   incomeThisMonth: paisaSchema,
