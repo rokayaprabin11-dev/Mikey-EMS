@@ -7,7 +7,10 @@ import {
   formatRupees,
   kathmanduDate,
   type PaymentMethod,
+  type PaymentPreviewRequest,
   type ReceiptLineInput,
+  type ReceiptPreview,
+  receiptMoney,
   schoolProfileSchema,
   toPaisaNumber,
 } from '@mikey/shared'
@@ -82,6 +85,22 @@ function plan(ledger: StudentLedger, requested: CollectPaymentRequest['allocatio
     }
   }
   return result
+}
+
+// What a payment would print, worked out and refused exactly as the payment would be, without
+// saving anything (POST /payments/preview).
+export async function previewPayment(db: Db, body: PaymentPreviewRequest): Promise<ReceiptPreview> {
+  const student = await db.student.findUnique({ where: { id: body.studentId }, select: { id: true } })
+  if (student === null) {
+    throw fail('NOT_FOUND', { what: 'student' })
+  }
+  const ledger = await readLedger(db, body.studentId)
+  const planned = plan(ledger, body.allocations)
+  return receiptMoney({
+    lines: planned.lines,
+    duesBefore: toPaisaNumber(ledger.outstanding),
+    discount: toPaisaNumber(planned.discount),
+  })
 }
 
 // Cash goes into the one cash account and every other method into the one bank account.

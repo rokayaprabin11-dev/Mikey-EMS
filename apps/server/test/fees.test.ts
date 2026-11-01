@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto'
 
 import type { User } from '@mikey/db'
-import { bsMonthName, bsToAd, collectPaymentResponseSchema, daysInBsMonth, studentDuesResponseSchema } from '@mikey/shared'
+import {
+  bsMonthName,
+  bsToAd,
+  collectPaymentResponseSchema,
+  daysInBsMonth,
+  receiptPreviewSchema,
+  studentDuesResponseSchema,
+} from '@mikey/shared'
 import PDFDocument from 'pdfkit'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -430,6 +437,63 @@ describe('collecting a fee', () => {
     } finally {
       await later.close()
     }
+  })
+})
+
+describe('the receipt before the payment is saved', () => {
+  function preview(body: object) {
+    return server.call({ method: 'POST', path: '/payments/preview', ip: COUNTER, token, body })
+  }
+
+  it('says what the payment will print, in the same words and numbers, and saves nothing', async () => {
+    const student = await createStudent(server.db, school)
+    const ashwin = await addDue(server.db, school, student.id, { month: 6, rupees: 3680, discountRupees: 500 })
+    const lateFine = await addFine(server.db, ashwin.id, 100)
+    const kartik = await addDue(server.db, school, student.id, { month: 7, rupees: 3680 })
+    // Ashwin is part paid already, so this payment pays its balance, and Kartik only in part.
+    await collected(payment(student.id, [fee(ashwin.id, 1000)]))
+    const allocations = [fee(ashwin.id, 2180), fine(lateFine.id, 100), fee(kartik.id, 2000)]
+
+    const counts = async () => ({
+      payments: await server.db.payment.count(),
+      receipts: await server.db.receipt.count(),
+      entries: await server.db.accountEntry.count(),
+      audit: await server.db.auditLog.count(),
+    })
+    const before = await counts()
+    const response = await preview({ studentId: student.id, allocations })
+    expect(response.statusCode, response.body).toBe(200)
+    const shown = receiptPreviewSchema.parse(response.json())
+    expect(await counts()).toEqual(before)
+
+    const { receipt } = await collected(payment(student.id, allocations))
+    const { months, lines, totals, amountInWords } = receipt.snapshot
+    expect(shown).toEqual({ months, lines, totals, amountInWords })
+    expect(shown.lines.map((line) => line.label)).toEqual([
+      'Monthly tuition, Ashwin 2083 (balance)',
+      'Late fine, Ashwin 2083',
+      'Monthly tuition, Kartik 2083 (part)',
+    ])
+    expect(shown.totals).toEqual({ duesBefore: 596_000, discount: 50_000, amountPaid: 428_000, balanceAfter: 168_000 })
+    expect(shown.amountInWords).toBe('Rupees Four Thousand Two Hundred Eighty Only')
+  })
+
+  it('refuses what the payment would refuse', async () => {
+    const student = await createStudent(server.db, school)
+    const kartik = await addDue(server.db, school, student.id, { month: 7, rupees: 3680 })
+    expect(errorOf(await preview({ studentId: student.id, allocations: [fee(kartik.id, 4000)] }))).toMatchObject({
+      status: 422,
+      code: 'AMOUNT_EXCEEDS_DUE',
+    })
+    await collected(payment(student.id, [fee(kartik.id, 3680)]))
+    expect(errorOf(await preview({ studentId: student.id, allocations: [fee(kartik.id, 100)] }))).toMatchObject({
+      status: 409,
+      code: 'DUE_ALREADY_PAID',
+    })
+    expect(errorOf(await preview({ studentId: randomUUID(), allocations: [fee(kartik.id, 100)] }))).toMatchObject({
+      status: 404,
+      code: 'NOT_FOUND',
+    })
   })
 })
 

@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify'
 import type { AppDeps } from '../deps.ts'
 import { fail } from '../errors.ts'
 import { registerRoute } from '../http/route.ts'
-import { collectPayment } from './collect.ts'
+import { collectPayment, previewPayment } from './collect.ts'
 import { owedItems, readLedger } from './ledger.ts'
 import { listPayments } from './payments.ts'
 import { allowOriginal, printOriginal, printTestReceipt, readReceipt, reprint } from './receipts.ts'
@@ -21,6 +21,8 @@ export function registerFeeRoutes(app: FastifyInstance, deps: AppDeps): void {
   })
 
   registerRoute(app, deps, 'collectPayment', (input) => collectPayment(deps, input))
+
+  registerRoute(app, deps, 'previewPayment', ({ body }) => previewPayment(deps.db, body))
 
   registerRoute(app, deps, 'printReceipt', (input) => printOriginal(deps, input))
 

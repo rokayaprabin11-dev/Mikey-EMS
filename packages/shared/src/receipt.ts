@@ -1,4 +1,4 @@
-import { type PaymentMethod, type ReceiptSnapshot, receiptSnapshotSchema } from './api/fees.ts'
+import { type PaymentMethod, type ReceiptPreview, receiptPreviewSchema, type ReceiptSnapshot, receiptSnapshotSchema } from './api/fees.ts'
 import { type AdDate, adToBs, type BsDate, bsMonthName, fiscalYearOf, formatBsDate } from './date.ts'
 import { printEn } from './i18n/print.en.ts'
 import { amountInWords } from './money.ts'
@@ -80,8 +80,30 @@ function monthsCovered(lines: readonly ReceiptLineInput[]): string | null {
   return joinWithAnd(sorted.map((bs) => `${bsMonthName(bs.month)} ${bs.year}`))
 }
 
-export function buildReceiptSnapshot(input: ReceiptSnapshotInput): ReceiptSnapshot {
+export interface ReceiptMoneyInput {
+  lines: readonly ReceiptLineInput[]
+  duesBefore: number
+  discount: number
+}
+
+// The money part of a receipt: its lines, totals and amount in words. The receipt and its preview
+// before saving (POST /payments/preview) both come from here, so they say the same.
+export function receiptMoney(input: ReceiptMoneyInput): ReceiptPreview {
   const amountPaid = input.lines.reduce((sum, line) => sum + line.amount, 0)
+  return receiptPreviewSchema.parse({
+    months: monthsCovered(input.lines),
+    lines: input.lines.map((line) => ({ label: lineLabel(line), amount: line.amount })),
+    totals: {
+      duesBefore: input.duesBefore,
+      discount: input.discount,
+      amountPaid,
+      balanceAfter: input.duesBefore - amountPaid,
+    },
+    amountInWords: amountInWords(amountPaid),
+  })
+}
+
+export function buildReceiptSnapshot(input: ReceiptSnapshotInput): ReceiptSnapshot {
   const paidOn = adToBs(input.paidDate)
   return receiptSnapshotSchema.parse({
     version: 1,
@@ -92,15 +114,7 @@ export function buildReceiptSnapshot(input: ReceiptSnapshotInput): ReceiptSnapsh
     issuedAt: input.issuedAt.toISOString(),
     date: { ad: input.paidDate, bs: formatBsDate(paidOn) },
     student: input.student,
-    months: monthsCovered(input.lines),
-    lines: input.lines.map((line) => ({ label: lineLabel(line), amount: line.amount })),
-    totals: {
-      duesBefore: input.duesBefore,
-      discount: input.discount,
-      amountPaid,
-      balanceAfter: input.duesBefore - amountPaid,
-    },
-    amountInWords: amountInWords(amountPaid),
+    ...receiptMoney(input),
     method: input.method,
     reference: input.reference,
     receivedBy: input.receivedBy,

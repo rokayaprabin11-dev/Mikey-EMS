@@ -55,6 +55,13 @@ const allocationSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('fine'), fineId: idSchema, amount: positivePaisaSchema }),
 ])
 
+function eachDueOnce(allocations: readonly z.infer<typeof allocationSchema>[]): boolean {
+  const targets = allocations.map((item) => (item.kind === 'fee' ? item.feeDueId : item.fineId))
+  return new Set(targets).size === targets.length
+}
+
+const DUE_TWICE = { error: 'The same due is listed twice.', path: ['allocations'] }
+
 export const collectPaymentRequestSchema = z
   .object({
     idempotencyKey: idempotencyKeySchema,
@@ -71,16 +78,49 @@ export const collectPaymentRequestSchema = z
     error: 'This payment method needs a reference number.',
     path: ['reference'],
   })
-  .refine(
-    (payment) => {
-      const targets = payment.allocations.map((item) => (item.kind === 'fee' ? item.feeDueId : item.fineId))
-      return new Set(targets).size === targets.length
-    },
-    { error: 'The same due is listed twice.', path: ['allocations'] },
-  )
+  .refine((payment) => eachDueOnce(payment.allocations), DUE_TWICE)
+
+// The dues a payment would pay, to see its receipt before it is saved (POST /payments/preview).
+export const paymentPreviewRequestSchema = z
+  .object({
+    studentId: idSchema,
+    allocations: z.array(allocationSchema).min(1),
+  })
+  .refine((payment) => eachDueOnce(payment.allocations), DUE_TWICE)
 
 // One line of a receipt as it was printed, for example "Monthly tuition, Kartik 2083 (part)".
 export const receiptLineSchema = z.object({ label: z.string().min(1), amount: positivePaisaSchema })
+
+// What a receipt says about the money, in the same words before it is saved (the preview) and on
+// the receipt itself.
+const receiptMoneyShape = {
+  months: z.string().nullable(),
+  lines: z.array(receiptLineSchema).min(1),
+  totals: z.object({
+    duesBefore: paisaSchema,
+    discount: paisaSchema,
+    amountPaid: positivePaisaSchema,
+    balanceAfter: paisaSchema,
+  }),
+  amountInWords: z.string().min(1),
+}
+
+type ReceiptMoneyFields = z.infer<z.ZodObject<typeof receiptMoneyShape>>
+
+const LINES_ADD_UP = { error: 'The lines do not add up to the amount paid.', path: ['totals', 'amountPaid'] }
+const BALANCE_FOLLOWS = { error: 'The balance after is not the dues before minus the amount paid.', path: ['totals', 'balanceAfter'] }
+
+function linesAddUp(money: ReceiptMoneyFields): boolean {
+  return money.lines.reduce((sum, line) => sum + line.amount, 0) === money.totals.amountPaid
+}
+
+function balanceFollows(money: ReceiptMoneyFields): boolean {
+  return money.totals.balanceAfter === money.totals.duesBefore - money.totals.amountPaid
+}
+
+// A payment's receipt worked out by the server and not saved: the Collect fee screen shows these
+// numbers and words, and works out no money itself.
+export const receiptPreviewSchema = z.object(receiptMoneyShape).refine(linesAddUp, LINES_ADD_UP).refine(balanceFollows, BALANCE_FOLLOWS)
 
 // Everything printed on a receipt, saved when it is issued. Receipts can never be changed, so a
 // receipt shows the same words and amounts for ever, whatever is renamed or edited later.
@@ -104,27 +144,13 @@ export const receiptSnapshotSchema = z
       rollNo: z.int().positive(),
       guardianName: z.string().nullable(),
     }),
-    months: z.string().nullable(),
-    lines: z.array(receiptLineSchema).min(1),
-    totals: z.object({
-      duesBefore: paisaSchema,
-      discount: paisaSchema,
-      amountPaid: positivePaisaSchema,
-      balanceAfter: paisaSchema,
-    }),
-    amountInWords: z.string().min(1),
+    ...receiptMoneyShape,
     method: paymentMethodSchema,
     reference: z.string().nullable(),
     receivedBy: z.string().min(1),
   })
-  .refine((snapshot) => snapshot.lines.reduce((sum, line) => sum + line.amount, 0) === snapshot.totals.amountPaid, {
-    error: 'The lines do not add up to the amount paid.',
-    path: ['totals', 'amountPaid'],
-  })
-  .refine((snapshot) => snapshot.totals.balanceAfter === snapshot.totals.duesBefore - snapshot.totals.amountPaid, {
-    error: 'The balance after is not the dues before minus the amount paid.',
-    path: ['totals', 'balanceAfter'],
-  })
+  .refine(linesAddUp, LINES_ADD_UP)
+  .refine(balanceFollows, BALANCE_FOLLOWS)
   .refine((snapshot) => snapshot.receiptNo.startsWith(`${snapshot.fiscalYear}-`), {
     error: 'The receipt number belongs to another fiscal year.',
     path: ['receiptNo'],
@@ -248,6 +274,8 @@ export type PaymentMethod = z.infer<typeof paymentMethodSchema>
 export type DueItem = z.infer<typeof dueItemSchema>
 export type StudentDuesResponse = z.infer<typeof studentDuesResponseSchema>
 export type CollectPaymentRequest = z.infer<typeof collectPaymentRequestSchema>
+export type PaymentPreviewRequest = z.infer<typeof paymentPreviewRequestSchema>
+export type ReceiptPreview = z.infer<typeof receiptPreviewSchema>
 export type ReceiptLine = z.infer<typeof receiptLineSchema>
 export type ReceiptSnapshot = z.infer<typeof receiptSnapshotSchema>
 export type Receipt = z.infer<typeof receiptSchema>
