@@ -14,7 +14,7 @@ import type { SettingsStore } from './settings.ts'
 const serverUrlSchema = z.string().refine((value) => serverUrlFrom(value) === value)
 const printerSchema = z.object({ name: z.string().min(1), paper: z.literal('A5') })
 const bytesSchema = z.instanceof(Uint8Array)
-const startAtSchema = z.enum(['setup', 'sign-in']) satisfies z.ZodType<StartAt>
+const startAtSchema = z.enum(['setup', 'get-allowed', 'sign-in']) satisfies z.ZodType<StartAt>
 
 const TEST_TIMEOUT_MS = 5_000
 

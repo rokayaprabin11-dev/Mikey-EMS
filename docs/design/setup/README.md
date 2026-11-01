@@ -9,9 +9,11 @@ Where an image and a decision differ, the decision wins. Decisions are in `docs/
 
 ## Computer 2
 
-- **Find Computer 1:** there is no network search. The accountant types the server address and clicks Test connection. The screen then shows "Connected to MIKEY-SERVER, Mikey English Medium School", taken from `/health` (D21).
-- **Get allowed:** the computer asks with `POST /api/v1/connection-requests` and repeats once a minute while pending. If the Super Admin declines, the screen shows "Declined" with an "Ask again" button (D20; ARCHITECTURE.md, Allowed computers).
-- **Receipt printer:** there is no "Print a test receipt" here. Test printing is in the Accountant settings panel after sign-in.
+- **Splash:** it shows the app's name, "Mikey EMS", because the school's name is not known before Computer 1 answers. It has two steps, "Opening the app" and "Connecting to Computer 1 at …". "Loading today's fees" is left off, because nothing can be loaded before sign-in. When Computer 1 cannot be used, the error panel says why ("Can't reach Computer 1 at …", or "Computer 1 is on, but its database has stopped."), with Try again, Copy error details and Change the server address, which opens setup.
+- **Which computer:** "This is the school server, Computer 1" cannot be chosen yet and says "Not available in this version yet."
+- **Find Computer 1:** there is no network search. The accountant types the server address and clicks Test connection. The screen then shows "Connected to MIKEY-SERVER, Mikey English Medium School", taken from `/health` (D21). The address is saved only when Continue is clicked after a test that worked.
+- **Get allowed:** the computer asks with `POST /api/v1/connection-requests` and repeats once a minute while pending. Once allowed, it shows "Allowed at 10:04 AM", never who allowed it. If the Super Admin declines, the screen shows "Declined at …" with an "Ask again" button (D20; ARCHITECTURE.md, Allowed computers). A computer that was set up before but is no longer allowed starts here.
+- **Receipt printer:** there is no "Print a test receipt" here. Test printing is in the Accountant settings panel after sign-in. Printers have no "Windows default" tag, and none is chosen until the accountant picks one, because Electron does not say which printer is the default. When Windows has no printer at all, setup can still finish, and the Ready page says receipts open the Windows print window.
 - **Step numbers:** the rail numbers Which computer, Find Computer 1, Get allowed and Receipt printer 1 to 4. Ready has no number. Pages say "Step N of 4".
 - **School logo:** the screens before sign-in use the logo shipped in the app (`apps/desktop/assets/school-logo.png`).
 

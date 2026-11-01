@@ -28,7 +28,7 @@ function RadioCard({
     <RadioGroupPrimitive.Item
       data-slot="radio-card"
       className={cn(
-        "group flex cursor-pointer items-start gap-4 rounded-xl border border-line-strong bg-surface p-5 text-left text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:cursor-not-allowed data-[state=checked]:border-2 data-[state=checked]:border-action",
+        "group flex cursor-pointer items-start gap-4 rounded-xl border border-line-strong bg-surface p-5 text-left text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:cursor-not-allowed disabled:bg-surface-muted data-[state=checked]:border-2 data-[state=checked]:border-action",
         className
       )}
       {...props}

@@ -38,8 +38,9 @@ export type PrintResult = { printed: true } | { printed: false; reason: string }
 
 export type SaveResult = { saved: true } | { saved: false }
 
-// Where the app window starts once the splash is done.
-export type StartAt = 'setup' | 'sign-in'
+// Where the app window starts once the splash is done: setup from the start, the "Get allowed"
+// step of setup (Computer 1 answers but does not allow this computer), or sign-in.
+export type StartAt = 'setup' | 'get-allowed' | 'sign-in'
 
 export interface Bridge {
   appVersion(): Promise<string>

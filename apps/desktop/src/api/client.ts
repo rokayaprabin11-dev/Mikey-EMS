@@ -1,7 +1,7 @@
 import { type Endpoint, type EndpointName, endpoints, errorBodySchema, type ErrorCode } from '@mikey/shared'
 import type { z, ZodType } from 'zod'
 
-import type { ServerReply, ServerRequest } from '../../electron/bridge.ts'
+import type { Bridge, ServerReply } from '../../electron/bridge.ts'
 import { bridge } from '../bridge.ts'
 import { en } from '../i18n/en.ts'
 
@@ -143,7 +143,18 @@ function readReply(name: string, response: Endpoint['response'], reply: ServerRe
   return parsed.data
 }
 
-export function createApiClient(send: (request: ServerRequest) => Promise<ServerReply>) {
+// What a reply means: its checked content, or the error it carries.
+function answer(name: EndpointName, reply: ServerReply): unknown {
+  if (!reply.reached) {
+    throw new UnreachableError(reply.reason)
+  }
+  if (reply.status < 200 || reply.status > 299) {
+    throw errorOf(reply)
+  }
+  return readReply(name, endpoints[name].response, reply)
+}
+
+export function createApiClient(transport: Pick<Bridge, 'request' | 'testServer'>) {
   // Kept in memory only, so the app asks for sign-in again after a restart (ARCHITECTURE.md).
   let token: string | null = null
 
@@ -155,28 +166,29 @@ export function createApiClient(send: (request: ServerRequest) => Promise<Server
     check(name, 'query', endpoint.query, input.query)
     check(name, 'body', endpoint.body, input.body)
 
-    const reply = await send({
+    const reply = await transport.request({
       method: endpoint.method,
       path: pathOf(name, endpoint, input),
       token: WITHOUT_SESSION.has(endpoint.access) ? null : token,
       body: input.body === undefined ? null : JSON.stringify(input.body),
       timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     })
-    if (!reply.reached) {
-      throw new UnreachableError(reply.reason)
-    }
-    if (reply.status < 200 || reply.status > 299) {
-      throw errorOf(reply)
-    }
-    return readReply(name, endpoint.response, reply) as CallOutput<N>
+    return answer(name, reply) as CallOutput<N>
   }
 
   return {
     call,
+    // GET /health at an address typed on setup, before it is saved.
+    async testServer(serverUrl: string): Promise<CallOutput<'health'>> {
+      return answer('health', await transport.testServer(serverUrl)) as CallOutput<'health'>
+    },
     setToken(value: string | null): void {
       token = value
     },
   }
 }
 
-export const api = createApiClient((request) => bridge().request(request))
+export const api = createApiClient({
+  request: (request) => bridge().request(request),
+  testServer: (serverUrl) => bridge().testServer(serverUrl),
+})

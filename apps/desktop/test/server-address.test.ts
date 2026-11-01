@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { serverUrlFrom } from '../electron/server-address.ts'
+import { addressOf, serverUrlFrom } from '../electron/server-address.ts'
 
 describe('the server address typed on "Find Computer 1"', () => {
   it.each([
@@ -43,5 +43,14 @@ describe('the server address typed on "Find Computer 1"', () => {
     const saved = serverUrlFrom('192.168.1.10')
     expect(saved).not.toBeNull()
     expect(serverUrlFrom(saved ?? '')).toBe(saved)
+  })
+
+  it('shows a saved address as it was typed, with the port only when it is not the usual one', () => {
+    expect(addressOf('http://192.168.1.10:3100')).toBe('192.168.1.10')
+    expect(addressOf('http://192.168.1.10:3199')).toBe('192.168.1.10:3199')
+    expect(addressOf('http://mikey-server:3100')).toBe('mikey-server')
+    for (const typed of ['192.168.1.10', '192.168.1.10:3199', 'MIKEY-SERVER']) {
+      expect(serverUrlFrom(addressOf(serverUrlFrom(typed) ?? ''))).toBe(serverUrlFrom(typed))
+    }
   })
 })

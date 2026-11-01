@@ -13,15 +13,25 @@ function reply(status: number, body: unknown, contentType = 'application/json; c
 // A Computer 1 that answers each request with the next reply, and remembers what it was sent.
 function computer1(...replies: ServerReply[]) {
   const sent: ServerRequest[] = []
-  const client = createApiClient((request) => {
-    sent.push(request)
-    const next = replies.shift()
-    if (next === undefined) {
+  const tested: string[] = []
+  const next = (): Promise<ServerReply> => {
+    const reply = replies.shift()
+    if (reply === undefined) {
       throw new Error('More requests than replies.')
     }
-    return Promise.resolve(next)
+    return Promise.resolve(reply)
+  }
+  const client = createApiClient({
+    request: (request) => {
+      sent.push(request)
+      return next()
+    },
+    testServer: (serverUrl) => {
+      tested.push(serverUrl)
+      return next()
+    },
   })
-  return { client, sent }
+  return { client, sent, tested }
 }
 
 const HEALTH = {
@@ -113,6 +123,18 @@ describe('the API client', () => {
         'Computer 1 sent a reply this app cannot read. Make sure both computers have the same version of Mikey EMS.',
       )
     }
+  })
+
+  it('tests a typed address with the same checks as any health reply', async () => {
+    const { client, sent, tested } = computer1(reply(200, HEALTH), reply(200, { server: 'ok' }), {
+      reached: false,
+      reason: 'No reply in time',
+    })
+    expect(await client.testServer('http://192.168.1.10:3100')).toEqual(HEALTH)
+    await expect(client.testServer('http://192.168.1.10:3100')).rejects.toBeInstanceOf(ReplyNotUnderstoodError)
+    await expect(client.testServer('http://192.168.1.99:3100')).rejects.toBeInstanceOf(UnreachableError)
+    expect(tested).toEqual(['http://192.168.1.10:3100', 'http://192.168.1.10:3100', 'http://192.168.1.99:3100'])
+    expect(sent).toEqual([])
   })
 
   it('gives a PDF as its bytes, and nothing for an empty reply', async () => {

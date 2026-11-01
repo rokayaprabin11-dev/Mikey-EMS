@@ -28,3 +28,8 @@ export function serverUrlFrom(typed: string): string | null {
   return isHost(host) && port >= 1 && port <= 65_535 ? `http://${host}:${port}` : null
 }
 
+// A saved address as the screens show it: `192.168.1.10`, with the port only when it is not 3100.
+export function addressOf(serverUrl: string): string {
+  const [host = serverUrl, port] = serverUrl.replace(/^http:\/\//, '').split(':')
+  return port === String(DEFAULT_PORT) ? host : `${host}:${port ?? ''}`
+}

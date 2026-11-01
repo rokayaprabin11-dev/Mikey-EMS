@@ -17,7 +17,7 @@ Full scope: `docs/PRODUCT.md`. Architecture: `docs/ARCHITECTURE.md`.
 
 Electron + React + TypeScript (strict) + Tailwind CSS + shadcn/ui + Recharts in the desktop app. Node.js + Fastify + Prisma + PostgreSQL + Zod in the server. PDFKit for PDFs, ExcelJS for Excel, electron-builder for the installer, `@aws-sdk/client-s3` for R2.
 
-Also approved: pnpm workspaces, electron-vite, TanStack Query (server data cache only), lucide-react (icons), `@fontsource/anek-latin` and `@fontsource/ibm-plex-sans`, a lookup-table BS date library such as `nepali-date-converter`, an argon2id package for password hashing, `croner` for scheduled jobs, vitest, `@prisma/adapter-pg` (Prisma 7's PostgreSQL driver adapter, which brings in `pg`), and the packages shadcn/ui's components import: `radix-ui`, `class-variance-authority` and `cn` (DECISIONS D27).
+Also approved: pnpm workspaces, electron-vite, TanStack Query (server data cache only), lucide-react (icons), `@fontsource/anek-latin` and `@fontsource/ibm-plex-sans`, a lookup-table BS date library such as `nepali-date-converter`, an argon2id package for password hashing, `croner` for scheduled jobs, vitest with `@testing-library/react` and `happy-dom` for screen tests, `@prisma/adapter-pg` (Prisma 7's PostgreSQL driver adapter, which brings in `pg`), and the packages shadcn/ui's components import: `radix-ui`, `class-variance-authority` and `cn` (DECISIONS D27).
 
 Do not add any other runtime dependency without saying why in the PR/commit message and checking that an existing dependency cannot do it. Pin every dependency to an exact version (no `^` or `~`). No state-management library, no CSS-in-JS, no ORM besides Prisma, no second UI kit.
 
