@@ -16,7 +16,7 @@ For every screen in the two design canvases (docs/DESIGN_SYSTEM.md links them): 
 | Sign in | `GET /health`, `POST /auth/login` | None |
 | Top bar | `GET /auth/session` (name, role), `GET /health` (connection pill), `GET /students` (Ctrl+K) | None |
 | Sidebar | `GET /health` | None |
-| Main (dashboard) | `GET /dashboard/finance`; the answers to my void requests from `GET /void-requests` | None. "Voids today" was added after Phase 4. |
+| Main (dashboard) | `GET /dashboard/finance`; the answers to my void requests from `GET /void-requests` | None. "Voids today" was added after Phase 4. Design to update: a "Voids today" tile sits beside "Collected today", and a bank tile names its account. The largest dues read "Class 7 A, Ashwin 2083 balance, Kartik 2083 and a fine": each due's period as the reply gives it (its fee head when the period is only a year), "balance" when part is paid, fines counted, and "and N more" after three. |
 | Collect fee | `GET /students`, `GET /students/:id/dues`, `GET /school` (receipt preview header, start of Phase 5), `POST /payments`, `POST /payments/:id/print`, `GET /payments/:id` | None |
 | Receipt (A5) | `POST /payments/:id/print`, `POST /payments/:id/reprint` | Design to update: lines read "Tuition fee, Ashwin 2083 (balance)"; built as "<fee head>, <period>". |
 | Payments | `GET /payments` (`from`, `takenBy`, `search`), `POST /payments/:id/reprint`, `POST /void-requests`, `GET /void-requests` | None |

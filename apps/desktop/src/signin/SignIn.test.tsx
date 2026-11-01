@@ -37,13 +37,14 @@ describe('signing in on Computer 2', () => {
     expect(screen.getByText('Mikey English Medium School')).toBeTruthy()
 
     fill('bikash.acc', PASSWORD)
-    expect(await screen.findByText('Signed in as Bikash Thapa')).toBeTruthy()
-    expect(screen.getByText('Accountant on Computer 2')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Good morning, Bikash' })).toBeTruthy()
     const login = bridge.sent.find((request) => request.path === '/auth/login')
     expect(login?.token).toBeNull()
     expect(JSON.parse(login?.body ?? '')).toEqual({ username: 'bikash.acc', password: PASSWORD })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    // Sign out from the account menu in the top bar.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Bikash Thapa, account menu' }), { key: 'Enter' })
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Sign out' }), { key: 'Enter' })
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeTruthy()
     expect(bridge.sent.find((request) => request.path === '/auth/logout')?.token).toBe(TOKEN)
     // Signed out: nothing from the session is shown, and no warning waits.

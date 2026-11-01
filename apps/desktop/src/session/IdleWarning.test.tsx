@@ -30,12 +30,16 @@ async function signedIn(): Promise<{ bridge: FakeBridge; server: ReturnType<type
   fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'bikash.acc' } })
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: PASSWORD } })
   fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-  await screen.findByText('Signed in as Bikash Thapa')
+  await screen.findByRole('heading', { name: 'Good morning, Bikash' })
   return { bridge, server }
 }
 
+// Time passing with nobody at the computer: the clock jumps on, then the app's one-second checks
+// run once. (Running every second of 14 minutes inside one act() is far more updates than any
+// real idle stretch makes, and React stops it as a loop.)
 async function wait(ms: number): Promise<void> {
-  await act(() => vi.advanceTimersByTimeAsync(ms))
+  vi.setSystemTime(Date.now() + ms)
+  await act(() => vi.advanceTimersByTimeAsync(1_000))
 }
 
 function sessionChecks(bridge: FakeBridge): number {
@@ -61,7 +65,7 @@ describe('signing out an idle session', () => {
     // A full idle time from the click, not from sign-in.
     await wait(13 * MINUTE)
     expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(screen.getByText('Signed in as Bikash Thapa')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Good morning, Bikash' })).toBeTruthy()
   })
 
   it("signs out at the end with Computer 1's own words, after asking it once more", async () => {
@@ -104,7 +108,7 @@ describe('signing out an idle session', () => {
       fireEvent.pointerDown(window)
     }
     expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(screen.getByText('Signed in as Bikash Thapa')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Good morning, Bikash' })).toBeTruthy()
   })
 
   it('goes back to sign-in whenever Computer 1 says the session has ended', async () => {

@@ -102,9 +102,10 @@ The components live in `apps/desktop/src/components/ui` (DECISIONS D27). Add one
 | Status chip | `Badge` | Tint background + strong text colour from the status tokens |
 | Segmented control | `ToggleGroup` | Selected = `ink` background, white text |
 | Tabs | `Tabs` | Underline style, selected = `ink` 2px underline |
+| Menus | `DropdownMenu` | The account menu in the top bar. A border and no shadow, since only dialogs have one |
 | Banners | `Alert` | Icon + bold sentence saying what happened + plain sentence saying what to do + one action button. Variants `ok`, `warn`, `bad`: the status tint behind the status colour, with the plain sentence in `ink-soft`. A `bad` banner is announced at once (`role="alert"`), the others politely (`role="status"`) |
 | Dialogs | `Dialog` / `AlertDialog` | Confirm money actions and restore. Restore requires typing `RESTORE`. A white card with a `line-strong` border over the page darkened with `ink`; the title in Anek Latin 19px, the buttons side by side (the main action wider) |
-| Charts | Recharts | Bars only (no pies). Current period in `action`, others in a muted tint. Always add a text summary |
+| Charts | Recharts | Bars only (no pies). Current period in `action`, others in a muted tint (`ink-muted` at 35%). Always add a text summary, under the chart as its caption. A chart is drawn once its box has a width |
 
 ## Screen patterns
 

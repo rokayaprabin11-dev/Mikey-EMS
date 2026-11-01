@@ -15,14 +15,14 @@ import { databaseDownProblem, type Problem, problemOf } from '../connection.ts'
 import { type HealthCheck, useHealth } from '../health.ts'
 import { en } from '../i18n/en.ts'
 import { useSession } from '../session/session.tsx'
+import { weekdayOf } from '../today.ts'
 
 const words = en.signIn
 
 // Today on Computer 1's clock, which dates every record: "Thursday, 12 Kartik 2083 (29 Oct 2026)".
 function today(time: string): string {
   const ad = kathmanduDate(new Date(time))
-  const weekday = en.weekdays[new Date(`${ad}T00:00:00Z`).getUTCDay()] ?? ''
-  return words.today(weekday, formatBsWithAd(ad))
+  return words.today(weekdayOf(ad), formatBsWithAd(ad))
 }
 
 function healthProblem(health: ReturnType<typeof useHealth>, address: string): Problem | null {
