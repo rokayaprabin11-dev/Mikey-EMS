@@ -31,9 +31,12 @@ export const connectionRequestCreateSchema = z.object({
   askAgain: z.boolean().default(false),
 })
 
+// Answered before the computer has signed in, so it says when it was allowed or declined, and
+// never who did it.
 export const connectionRequestResponseSchema = z.object({
   ip: ipSchema,
   status: z.enum(['pending', 'allowed', 'declined']),
+  decidedAt: timestampSchema.nullable(),
 })
 
 export const allowedComputerSchema = z.object({

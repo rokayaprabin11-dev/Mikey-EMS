@@ -53,7 +53,9 @@ export function registerConnectionRoutes(app: FastifyInstance, deps: AppDeps): v
     deps.db.$transaction(async (tx) => {
       await lockConnectionList(tx)
       if (await isAllowedComputer(tx, ip)) {
-        return { ip, status: 'allowed' as const }
+        // Computer 1 itself is always allowed and has no allow-list row.
+        const allowed = await tx.allowedComputer.findFirst({ where: { ip, removedAt: null }, select: { allowedAt: true } })
+        return { ip, status: 'allowed' as const, decidedAt: allowed?.allowedAt.toISOString() ?? null }
       }
       await tx.connectionRequest.updateMany({
         where: { status: 'pending', lastSeenAt: { lt: expiryCutoff(now) } },
@@ -68,10 +70,10 @@ export function registerConnectionRoutes(app: FastifyInstance, deps: AppDeps): v
             data: { lastSeenAt: now, computerName: body.computerName },
           })
         }
-        return { ip, status: 'pending' as const }
+        return { ip, status: 'pending' as const, decidedAt: null }
       }
       if (latest?.status === 'declined' && (!body.askAgain || withinRepeatWindow(latest.requestedAt, now))) {
-        return { ip, status: 'declined' as const }
+        return { ip, status: 'declined' as const, decidedAt: latest.decidedAt?.toISOString() ?? null }
       }
 
       if ((await tx.connectionRequest.count({ where: { status: 'pending' } })) >= PENDING_LIMIT) {
@@ -80,7 +82,7 @@ export function registerConnectionRoutes(app: FastifyInstance, deps: AppDeps): v
       await tx.connectionRequest.create({
         data: { ip, computerName: body.computerName, requestedAt: now, lastSeenAt: now },
       })
-      return { ip, status: 'pending' as const }
+      return { ip, status: 'pending' as const, decidedAt: null }
     }),
   )
 

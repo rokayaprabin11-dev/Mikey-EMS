@@ -41,11 +41,11 @@ async function pendingRequestId(ip: string): Promise<string> {
 
 describe('asking to connect', () => {
   it('records a request from the office network, and a repeat refreshes it at most once a minute', async () => {
-    expect(await statusOf('192.168.1.21')).toEqual({ ip: '192.168.1.21', status: 'pending' })
+    expect(await statusOf('192.168.1.21')).toEqual({ ip: '192.168.1.21', status: 'pending', decidedAt: null })
     const asked = server.now()
 
     server.advanceMinutes(0.5)
-    expect(await statusOf('192.168.1.21')).toEqual({ ip: '192.168.1.21', status: 'pending' })
+    expect(await statusOf('192.168.1.21')).toEqual({ ip: '192.168.1.21', status: 'pending', decidedAt: null })
     expect(await server.db.connectionRequest.findMany({ where: { ip: '192.168.1.21' } })).toMatchObject([
       { lastSeenAt: asked },
     ])
@@ -58,7 +58,7 @@ describe('asking to connect', () => {
   })
 
   it('reads an IPv4 address written inside IPv6 as IPv4', async () => {
-    expect(await statusOf('::ffff:192.168.1.22')).toEqual({ ip: '192.168.1.22', status: 'pending' })
+    expect(await statusOf('::ffff:192.168.1.22')).toEqual({ ip: '192.168.1.22', status: 'pending', decidedAt: null })
   })
 
   it('refuses a computer outside the office network', async () => {
@@ -114,7 +114,8 @@ describe('asking to connect', () => {
       userId: admin.id,
       computer: 1,
     })
-    expect(await statusOf('192.168.1.23')).toEqual({ ip: '192.168.1.23', status: 'allowed' })
+    // It learns when it was allowed, but not who allowed it: it has not signed in.
+    expect(await statusOf('192.168.1.23')).toEqual({ ip: '192.168.1.23', status: 'allowed', decidedAt: allowed.allowedAt })
 
     expect(errorOf(await adminCall('POST', `/connection-requests/${requestId}/allow`))).toMatchObject({
       status: 409,
@@ -131,10 +132,11 @@ describe('asking to connect', () => {
     const requestId = await pendingRequestId('192.168.1.24')
 
     expect((await adminCall('POST', `/connection-requests/${requestId}/decline`)).statusCode).toBe(204)
+    const declinedAt = server.now().toISOString()
     expect(await server.db.auditLog.findFirst({ where: { recordId: requestId } })).toMatchObject({
       action: 'network.request_declined',
     })
-    expect(await statusOf('192.168.1.24')).toMatchObject({ status: 'declined' })
+    expect(await statusOf('192.168.1.24')).toEqual({ ip: '192.168.1.24', status: 'declined', decidedAt: declinedAt })
     expect(await statusOf('192.168.1.24', { askAgain: true })).toMatchObject({ status: 'declined' })
 
     server.advanceMinutes(1)
@@ -242,7 +244,8 @@ describe('the allow list', () => {
     })
 
     const again = await adminCall('POST', '/allowed-computers', { ip: '192.168.1.27', computerName: 'ACCOUNTS-PC' })
-    expect(allowedComputerSchema.parse(again.json())).toMatchObject({ id: added.id, ip: '192.168.1.27' })
-    expect(await statusOf('192.168.1.27')).toEqual({ ip: '192.168.1.27', status: 'allowed' })
+    const allowedAgain = allowedComputerSchema.parse(again.json())
+    expect(allowedAgain).toMatchObject({ id: added.id, ip: '192.168.1.27' })
+    expect(await statusOf('192.168.1.27')).toEqual({ ip: '192.168.1.27', status: 'allowed', decidedAt: allowedAgain.allowedAt })
   })
 })
