@@ -109,7 +109,18 @@ describe('student search', () => {
     for (const typed of ['98411 52074', '9841152074', '98411', '984-115-2074']) {
       expect((await search({ q: typed })).map((found) => found.id), typed).toContain(student.id)
     }
-    expect((await search({ q: '52074' })).map((found) => found.id)).not.toContain(student.id)
+    // Digits from the middle of the number are neither its start nor its end.
+    expect((await search({ q: '1152' })).map((found) => found.id)).not.toContain(student.id)
+  })
+
+  it("a search by the last 4 digits of a guardian's phone finds the student, and fewer digits do not search phones", async () => {
+    const student = await studentWithPhone('Lhakpa Doma Lama', '98033 47195')
+    const ids = async (q: string) => (await search({ q })).map((found) => found.id)
+    expect(await ids('7195')).toContain(student.id)
+    expect(await ids('347195')).toContain(student.id)
+    expect(await ids('195')).not.toContain(student.id)
+    expect(await ids('9803')).toContain(student.id)
+    expect(await ids('980')).not.toContain(student.id)
   })
 
   it('finds a student by the start of any word of their name or student ID, by roll number, and within a class', async () => {

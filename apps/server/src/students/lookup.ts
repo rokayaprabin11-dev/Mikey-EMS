@@ -17,12 +17,17 @@ import { outstandingByStudent } from '../fees/outstanding.ts'
 import { recordStatus } from '../record-status.ts'
 
 const MAX_RESULTS = 20
-// Roll numbers are at most three digits; a longer number is a phone number or part of an ID.
+// Roll numbers are at most three digits. A phone number is searched from four digits on, by its
+// first digits or its last ones.
 const ROLL_DIGITS = 3
+const PHONE_DIGITS_AT_LEAST = 4
 
 // These match the indexes in the student_search migration exactly, so the planner can use them.
 const NAME_AND_ID_WORDS = Prisma.sql`to_tsvector('simple'::regconfig, regexp_replace("full_name" || ' ' || "student_code", '[^[:alnum:]]+', ' ', 'g'))`
-const PHONE_DIGITS = Prisma.sql`to_tsvector('simple'::regconfig, regexp_replace("phone", '[^0-9]', '', 'g') || ' ' || regexp_replace(coalesce("alt_phone", ''), '[^0-9]', '', 'g'))`
+const PHONE_DIGITS = Prisma.sql`to_tsvector('simple'::regconfig,
+  regexp_replace("phone", '[^0-9]', '', 'g') || ' ' || regexp_replace(coalesce("alt_phone", ''), '[^0-9]', '', 'g')
+  || ' r' || reverse(regexp_replace("phone", '[^0-9]', '', 'g'))
+  || ' r' || reverse(regexp_replace(coalesce("alt_phone", ''), '[^0-9]', '', 'g')))`
 
 // Each student's latest enrollment (by the session's start date), as fee collection uses it.
 export const LATEST_ENROLLMENTS = Prisma.sql`
@@ -41,9 +46,9 @@ interface FoundRow {
   section_name: string
 }
 
-// The students the typed text matches: the start of any word of the name or student ID, the start
-// of a guardian's phone number typed with or without spaces, or a roll number. Null when nothing
-// was typed.
+// The students the typed text matches: the start of any word of the name or student ID, the first
+// or the last digits of a guardian's phone number typed with or without spaces, or a roll number.
+// Null when nothing was typed.
 function matching(text: string): Prisma.Sql | null {
   const words = text
     .toLowerCase()
@@ -56,11 +61,15 @@ function matching(text: string): Prisma.Sql | null {
     Prisma.sql`SELECT id AS student_id FROM students WHERE ${NAME_AND_ID_WORDS} @@ to_tsquery('simple', ${words.map((word) => `${word}:*`).join(' & ')})`,
   ]
   const digits = /^[\d\s()+-]+$/.test(text) ? text.replace(/\D/g, '') : ''
-  if (digits !== '') {
-    tests.push(Prisma.sql`SELECT student_id FROM guardians WHERE ${PHONE_DIGITS} @@ to_tsquery('simple', ${`${digits}:*`})`)
-    if (digits.length <= ROLL_DIGITS) {
-      tests.push(Prisma.sql`SELECT student_id FROM latest WHERE roll_no = ${Number(digits)}`)
-    }
+  if (digits.length >= PHONE_DIGITS_AT_LEAST) {
+    // The last digits are the start of the reversed number, which the index keeps after an "r".
+    const lastDigits = `r${[...digits].reverse().join('')}`
+    tests.push(
+      Prisma.sql`SELECT student_id FROM guardians WHERE ${PHONE_DIGITS} @@ to_tsquery('simple', ${`${digits}:* | ${lastDigits}:*`})`,
+    )
+  }
+  if (digits !== '' && digits.length <= ROLL_DIGITS) {
+    tests.push(Prisma.sql`SELECT student_id FROM latest WHERE roll_no = ${Number(digits)}`)
   }
   return Prisma.join(tests, ' UNION ')
 }
