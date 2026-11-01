@@ -69,6 +69,7 @@ Flow: find student → show unpaid dues oldest first → tick dues and set amoun
 - Default paper: A5 portrait *(setting; final printer unconfirmed)*.
 - After the original, a receipt can be reprinted any number of times (`payments.reprint`). Each copy is a new `receipt_prints` row saying who printed it, on which computer and when, and is marked "Copy of original, print #N", where N is the print number. A copy before the original gets 409 `ORIGINAL_NOT_PRINTED`. Printing never changes the receipt. **[test]**
 - Any print made after a void carries a large "VOID" across the page. **[test]**
+- A **test print** (`GET /receipts/test`, `fees.collect`) draws the receipt's page with one sample line, says "Test print, not a receipt" where the original says "Original", and carries a large "TEST". It saves nothing and uses no receipt number. **[test]**
 - The **Payments list** shows the receipts of one day, or of several (`from` to `to`), newest first and as they were printed, lines included. It filters by who took them (me or everyone), method, status or a search; its total and its totals by method add up the listed receipts that still stand. **[test]**
 
 ## 6. Voids and corrections

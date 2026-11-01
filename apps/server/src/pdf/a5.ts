@@ -31,19 +31,23 @@ export interface PrintDetails {
   copy: number | null
 }
 
+export function whichPrint(copy: number | null): string {
+  return copy === null ? words.original : words.copy(copy)
+}
+
 // A page in the receipt's style: the school beside its crest, the document's title and whether
 // this print is the original or a copy, and a footer saying when and where it was printed.
 export class A5Layout extends PdfLayout {
   protected y = TOP
 
-  protected header(school: SchoolHeading, title: string, copy: number | null): void {
+  // `which` says which print this is: the original, a numbered copy, or a test print.
+  protected header(school: SchoolHeading, title: string, which: string): void {
     const contact = [
       school.phone === null ? null : `${words.phone} ${school.phone}`,
       school.pan === null ? null : `${words.pan} ${school.pan}`,
     ]
       .filter((part) => part !== null)
       .join('   ')
-    const which = copy === null ? words.original : words.copy(copy)
     const titleWidth = Math.max(this.widthOf(title, 'display', 18), this.widthOf(which, 'regular', 12))
     const textX = LEFT + CREST_WIDTH + 12
     const textWidth = RIGHT - titleWidth - 12 - textX

@@ -1,6 +1,6 @@
 import { formatAdDate, formatBsDateLong, formatReceiptAmount, parseBsDate, printEn, type ReceiptSnapshot } from '@mikey/shared'
 
-import { A5Layout, FOOTER_TOP, GAP, LEFT, PAGE_HEIGHT, PAGE_WIDTH, type PrintDetails, RIGHT, TOP, WIDTH } from './a5.ts'
+import { A5Layout, FOOTER_TOP, GAP, LEFT, PAGE_HEIGHT, PAGE_WIDTH, type PrintDetails, RIGHT, TOP, whichPrint, WIDTH } from './a5.ts'
 import { INK, LINE_HEIGHT, pt, renderPdf, RULE, type Run } from './layout.ts'
 
 const words = printEn.receipt
@@ -19,9 +19,11 @@ const STAMP_TEXT = '#4A5560'
 // The design system's `bad` colour: money out.
 const VOID_MARK = '#B42318'
 
-// A voided receipt is marked VOID whenever it is printed after the void.
+// A voided receipt is marked VOID whenever it is printed after the void. A test print is marked
+// TEST and says it is not a receipt.
 export interface ReceiptPrintDetails extends PrintDetails {
   voided: boolean
+  test: boolean
 }
 
 class ReceiptLayout extends A5Layout {
@@ -35,7 +37,7 @@ class ReceiptLayout extends A5Layout {
   }
 
   draw(): void {
-    this.header(this.snapshot.school, words.title, this.print.copy)
+    this.header(this.snapshot.school, words.title, this.print.test ? printEn.document.testPrint : whichPrint(this.print.copy))
     this.details()
     this.studentBox()
     this.lines()
@@ -253,15 +255,21 @@ class ReceiptLayout extends A5Layout {
     })
   }
 
-  // Closes a page: the footer, and across a voided receipt a large VOID that leaves every line
-  // underneath readable.
+  // Closes a page: the footer, and across a voided receipt a large VOID (or TEST across a test
+  // print) that leaves every line underneath readable.
   private endPage(): void {
     this.footer(words.keep, this.print)
+    let mark: string | null = null
     if (this.print.voided) {
+      mark = words.voided
+    } else if (this.print.test) {
+      mark = words.testMark
+    }
+    if (mark !== null) {
       const size = 120
       this.doc.save().rotate(-30, { origin: [pt(PAGE_WIDTH / 2), pt(PAGE_HEIGHT / 2)] }).fillOpacity(0.22)
       this.use('display', size, VOID_MARK)
-      this.doc.text(words.voided, 0, pt(PAGE_HEIGHT / 2 - (size * LINE_HEIGHT) / 2), {
+      this.doc.text(mark, 0, pt(PAGE_HEIGHT / 2 - (size * LINE_HEIGHT) / 2), {
         width: pt(PAGE_WIDTH),
         align: 'center',
         lineBreak: false,

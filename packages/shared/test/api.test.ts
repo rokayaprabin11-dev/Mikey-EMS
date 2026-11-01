@@ -227,7 +227,7 @@ describe('API contract', () => {
     expect(new Set(routes).size).toBe(routes.length)
   })
 
-  const noSession = new Set<string>(['anyone', 'local_network', 'allowed_computer'])
+  const noSession = new Set<string>(['anyone', 'local_network', 'allowed_computer', 'optional_sign_in'])
 
   it('names a real permission or one of the access levels', () => {
     const allowed = new Set<string>([...PERMISSION_KEYS, ...noSession, 'signed_in'])
@@ -236,7 +236,7 @@ describe('API contract', () => {
     }
   })
 
-  it('lets only health, connection requests and sign-in work without a session', () => {
+  it('lets only health, connection requests, sign-in and the school name work without a session', () => {
     const open = list
       .filter((endpoint) => noSession.has(endpoint.access))
       .map((endpoint) => `${endpoint.access} ${endpoint.method} ${endpoint.path}`)
@@ -244,6 +244,7 @@ describe('API contract', () => {
       'allowed_computer POST /auth/login',
       'anyone GET /health',
       'local_network POST /connection-requests',
+      'optional_sign_in GET /school',
     ])
   })
 })

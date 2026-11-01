@@ -1,4 +1,15 @@
-import { type Receipt, type ReceiptSnapshot, receiptSnapshotSchema } from '@mikey/shared'
+import {
+  adToBs,
+  amountInWords,
+  fiscalYearOf,
+  formatBsDate,
+  kathmanduDate,
+  printEn,
+  type Receipt,
+  type ReceiptSnapshot,
+  receiptSnapshotSchema,
+  schoolProfileSchema,
+} from '@mikey/shared'
 
 import { writeAudit } from '../audit.ts'
 import type { RequestContext, SessionContext } from '../auth/sessions.ts'
@@ -6,6 +17,9 @@ import type { AppDeps, Db } from '../deps.ts'
 import { fail } from '../errors.ts'
 import { renderReceipt } from '../pdf/receipt.ts'
 import { recordStatus } from '../record-status.ts'
+import { readSetting } from '../settings.ts'
+
+const words = printEn.receipt
 
 export async function readReceipt(db: Db, paymentId: string): Promise<Receipt> {
   const row = await db.receipt.findUnique({
@@ -76,7 +90,7 @@ export function printOriginal(deps: AppDeps, input: ReceiptInput): Promise<Buffe
       allowanceId = allowance.id
     }
     const voided = await isVoided(tx, params.paymentId)
-    const pdf = await renderReceipt(receipt.snapshot, { printedAt: now, computer, copy: null, voided })
+    const pdf = await renderReceipt(receipt.snapshot, { printedAt: now, computer, copy: null, voided, test: false })
     await tx.receiptPrint.create({
       data: {
         receiptId: receipt.id,
@@ -103,7 +117,7 @@ export function reprint(deps: AppDeps, input: ReceiptInput): Promise<Buffer> {
     }
     const printNo = Math.max(...printed) + 1
     const voided = await isVoided(tx, params.paymentId)
-    const pdf = await renderReceipt(receipt.snapshot, { printedAt: now, computer, copy: printNo, voided })
+    const pdf = await renderReceipt(receipt.snapshot, { printedAt: now, computer, copy: printNo, voided, test: false })
     await tx.receiptPrint.create({
       data: { receiptId: receipt.id, printNo, computer, printedById: session.user.id, printedAt: now },
     })
@@ -138,3 +152,35 @@ export async function allowOriginal(deps: AppDeps, input: ReceiptInput & { body:
     })
   })
 }
+
+// The receipt's page with a sample line and a large TEST across it, to check the printer and the
+// paper. It is not a receipt: nothing is saved and no receipt number is used.
+export async function printTestReceipt(deps: AppDeps, input: RequestContext & { session: SessionContext }): Promise<Buffer> {
+  const { session, now, computer } = input
+  const school = await readSetting(deps.db, 'school.profile', schoolProfileSchema)
+  if (school === null) {
+    throw fail('SCHOOL_NOT_SET_UP', { making: 'receipts' })
+  }
+  const current = await deps.db.academicSession.findFirst({ where: { isCurrent: true }, select: { name: true } })
+  const today = kathmanduDate(now)
+  const amount = 100_000
+  const snapshot: ReceiptSnapshot = {
+    version: 1,
+    school: { name: school.name, address: school.address, phone: school.phone, pan: school.pan, logo: null },
+    receiptNo: words.testMark,
+    fiscalYear: fiscalYearOf(adToBs(today)),
+    sessionName: current?.name ?? words.testMark,
+    issuedAt: now.toISOString(),
+    date: { ad: today, bs: formatBsDate(adToBs(today)) },
+    student: { code: words.testMark, fullName: words.testStudent, className: words.testMark, sectionName: '', rollNo: 1, guardianName: null },
+    months: null,
+    lines: [{ label: words.testLine, amount }],
+    totals: { duesBefore: amount, discount: 0, amountPaid: amount, balanceAfter: 0 },
+    amountInWords: amountInWords(amount),
+    method: 'cash',
+    reference: null,
+    receivedBy: session.user.fullName,
+  }
+  return renderReceipt(snapshot, { printedAt: now, computer, copy: null, voided: false, test: true })
+}
+

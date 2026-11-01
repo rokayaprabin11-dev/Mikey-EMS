@@ -4,7 +4,7 @@ import type { z } from 'zod'
 
 import { authenticate, type RequestContext, type SessionContext } from '../auth/sessions.ts'
 import type { AppDeps } from '../deps.ts'
-import { fail } from '../errors.ts'
+import { AppError, fail } from '../errors.ts'
 import { isLoopback, isOnLocalNetwork, normalizeIp } from '../network.ts'
 import { isAllowedComputer } from '../system/allow-list.ts'
 
@@ -17,7 +17,9 @@ type Reply<R> = R extends z.ZodType ? z.input<R> : R extends 'empty' ? void : Bu
 
 type WithSession<A extends Access> = A extends 'anyone' | 'local_network' | 'allowed_computer'
   ? unknown
-  : { session: SessionContext }
+  : A extends 'optional_sign_in'
+    ? { session: SessionContext | null }
+    : { session: SessionContext }
 
 type RouteInput<N extends EndpointName> = RequestContext &
   WithSession<Definition<N>['access']> & {
@@ -63,6 +65,20 @@ async function checkAccess(
   if (access === 'allowed_computer') {
     return null
   }
+  if (access === 'optional_sign_in') {
+    // No session, or one that has ended, simply means "not signed in" here.
+    if (authorization === undefined) {
+      return null
+    }
+    try {
+      return await authenticate(deps, authorization, context)
+    } catch (error) {
+      if (error instanceof AppError) {
+        return null
+      }
+      throw error
+    }
+  }
   const session = await authenticate(deps, authorization, context)
   if (access !== 'signed_in' && !session.permissions.has(access)) {
     throw fail('NO_PERMISSION')
@@ -91,7 +107,7 @@ export function registerRoute<N extends EndpointName>(
       const session = await checkAccess(deps, endpoint.access, context, request.headers.authorization)
       const input = {
         ...context,
-        ...(session === null ? {} : { session }),
+        ...(session === null && endpoint.access !== 'optional_sign_in' ? {} : { session }),
         params: parseInput(endpoint.params, request.params),
         query: parseInput(endpoint.query, request.query),
         body: parseInput(endpoint.body, request.body),

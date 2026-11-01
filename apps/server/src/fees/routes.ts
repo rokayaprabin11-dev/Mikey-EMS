@@ -7,7 +7,7 @@ import { registerRoute } from '../http/route.ts'
 import { collectPayment } from './collect.ts'
 import { owedItems, readLedger } from './ledger.ts'
 import { listPayments } from './payments.ts'
-import { allowOriginal, printOriginal, readReceipt, reprint } from './receipts.ts'
+import { allowOriginal, printOriginal, printTestReceipt, readReceipt, reprint } from './receipts.ts'
 import { approveVoid, declineVoid, listVoidRequests, requestVoid, voidDirectly } from './voids.ts'
 
 export function registerFeeRoutes(app: FastifyInstance, deps: AppDeps): void {
@@ -25,6 +25,8 @@ export function registerFeeRoutes(app: FastifyInstance, deps: AppDeps): void {
   registerRoute(app, deps, 'printReceipt', (input) => printOriginal(deps, input))
 
   registerRoute(app, deps, 'reprintReceipt', (input) => reprint(deps, input))
+
+  registerRoute(app, deps, 'testReceipt', (input) => printTestReceipt(deps, input))
 
   registerRoute(app, deps, 'allowOriginalPrint', (input) => allowOriginal(deps, input))
 

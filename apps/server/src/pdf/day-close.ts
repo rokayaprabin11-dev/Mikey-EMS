@@ -9,7 +9,7 @@ import {
   printEn,
 } from '@mikey/shared'
 
-import { A5Layout, FOOTER_TOP, GAP, LEFT, type PrintDetails, RIGHT, TOP, WIDTH } from './a5.ts'
+import { A5Layout, FOOTER_TOP, GAP, LEFT, type PrintDetails, RIGHT, TOP, whichPrint, WIDTH } from './a5.ts'
 import { INK, LINE_HEIGHT, pt, renderPdf, RULE, type Run } from './layout.ts'
 
 const words = printEn.dayClose
@@ -77,7 +77,7 @@ class DayCloseLayout extends A5Layout {
   draw(): void {
     const { feesByMethod, incomeByCategory, expensesByCategory, transfers, voids } = this.snapshot
     const amountColumn = { header: words.amountColumn, width: AMOUNT, align: 'right' } as const
-    this.header(this.snapshot.school, words.title, this.print.copy)
+    this.header(this.snapshot.school, words.title, whichPrint(this.print.copy))
     this.details()
     this.cashBook()
     this.cashCount()

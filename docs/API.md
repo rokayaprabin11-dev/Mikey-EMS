@@ -19,7 +19,7 @@ Generated from the code by `pnpm api:doc` (apps/server/scripts/api-doc.ts): the 
 | POST | `/connection-requests/:requestId/decline` | Super Admin (`settings.manage`) | — | nothing | NOT_ALLOWED, NOT_FOUND, NOT_SIGNED_IN, NO_PERMISSION, REQUEST_NOT_PENDING, SESSION_EXPIRED, VALIDATION_FAILED |
 | POST | `/allowed-computers` | Super Admin (`settings.manage`) | body `allowedComputerCreateSchema` | `allowedComputerSchema` | ALREADY_ALLOWED, ALWAYS_ALLOWED, NOT_ALLOWED, NOT_SIGNED_IN, NO_PERMISSION, SESSION_EXPIRED, VALIDATION_FAILED |
 | POST | `/allowed-computers/:computerId/remove` | Super Admin (`settings.manage`) | — | nothing | ALREADY_REMOVED, NOT_ALLOWED, NOT_FOUND, NOT_SIGNED_IN, NO_PERMISSION, SESSION_EXPIRED, VALIDATION_FAILED |
-| GET | `/school` | both | — | `schoolProfileSchema` | not built yet |
+| GET | `/school` | an allowed computer; more once signed in | — | `schoolResponseSchema` | NOT_ALLOWED |
 | GET | `/classes` | both | — | `classesResponseSchema` | NOT_ALLOWED, NOT_SIGNED_IN, SESSION_EXPIRED |
 | GET | `/dashboard/finance` | both (`dashboard.finance`) | — | `financeDashboardSchema` | ACCOUNT_NOT_SET_UP, NOT_ALLOWED, NOT_SIGNED_IN, NO_PERMISSION, SESSION_EXPIRED |
 | GET | `/dashboard/school` | Super Admin (`dashboard.school`) | — | `schoolDashboardSchema` | ACCOUNT_NOT_SET_UP, NOT_ALLOWED, NOT_SIGNED_IN, NO_PERMISSION, SESSION_EXPIRED |
@@ -29,7 +29,7 @@ Generated from the code by `pnpm api:doc` (apps/server/scripts/api-doc.ts): the 
 | POST | `/payments` | both (`fees.collect`) | body `collectPaymentRequestSchema` | `collectPaymentResponseSchema` | ACCOUNT_NOT_SET_UP, AMOUNT_EXCEEDS_DUE, DUE_ALREADY_PAID, DUE_NOT_OWED, NOT_ALLOWED, NOT_FOUND, NOT_SIGNED_IN, NO_PERMISSION, SCHOOL_NOT_SET_UP, SESSION_EXPIRED, STUDENT_NOT_IN_CLASS, VALIDATION_FAILED |
 | POST | `/payments/:paymentId/print` | both (`fees.collect`) | — | PDF | ALREADY_PRINTED, NOT_ALLOWED, NOT_FOUND, NOT_SIGNED_IN, NO_PERMISSION, SESSION_EXPIRED, VALIDATION_FAILED |
 | POST | `/payments/:paymentId/reprint` | both (`payments.reprint`) | — | PDF | NOT_ALLOWED, NOT_FOUND, NOT_SIGNED_IN, NO_PERMISSION, ORIGINAL_NOT_PRINTED, SESSION_EXPIRED, VALIDATION_FAILED |
-| GET | `/receipts/test` | both (`fees.collect`) | — | PDF | not built yet |
+| GET | `/receipts/test` | both (`fees.collect`) | — | PDF | NOT_ALLOWED, NOT_SIGNED_IN, NO_PERMISSION, SCHOOL_NOT_SET_UP, SESSION_EXPIRED |
 | GET | `/payments` | both (`payments.view`) | query `paymentsListQuerySchema` | `paymentsListResponseSchema` | NOT_ALLOWED, NOT_SIGNED_IN, NO_PERMISSION, SESSION_EXPIRED, VALIDATION_FAILED |
 | GET | `/payments/:paymentId` | both (`payments.view`) | — | `receiptSchema` | NOT_ALLOWED, NOT_FOUND, NOT_SIGNED_IN, NO_PERMISSION, SESSION_EXPIRED, VALIDATION_FAILED |
 | POST | `/void-requests` | both (`payments.requestVoid`) | body `voidRequestCreateSchema` | `voidRequestSchema` | ALREADY_VOIDED, NOT_ALLOWED, NOT_FOUND, NOT_SIGNED_IN, NO_PERMISSION, SESSION_EXPIRED, VALIDATION_FAILED, VOID_ALREADY_REQUESTED |

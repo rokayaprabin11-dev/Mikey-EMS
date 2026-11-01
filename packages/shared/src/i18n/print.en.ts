@@ -18,6 +18,7 @@ export const printEn = {
   document: {
     original: 'Original',
     copy: (printNo: number) => `Copy of original, print #${printNo}`,
+    testPrint: 'Test print, not a receipt',
     phone: 'Phone',
     pan: 'PAN',
     printed: (time: string, computer: number) => `Printed ${time}, Computer ${computer}`,
@@ -25,6 +26,9 @@ export const printEn = {
   receipt: {
     title: 'Fee receipt',
     voided: 'VOID',
+    testMark: 'TEST',
+    testStudent: 'Test print',
+    testLine: 'Test line, to check the printer and the paper',
     receiptNo: 'Receipt no.',
     date: 'Date',
     fiscalYear: 'Fiscal year',

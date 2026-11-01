@@ -13,10 +13,15 @@ const SOURCE_DIR = fileURLToPath(new URL('../src/', import.meta.url))
 export const API_DOC = fileURLToPath(new URL('../../../docs/API.md', import.meta.url))
 
 // What each kind of access can refuse with, checked in http/route.ts and auth/sessions.ts.
-const ACCESS_CODES: Record<'anyone' | 'local_network' | 'allowed_computer' | 'signed_in' | 'permission', readonly string[]> = {
+const ACCESS_CODES: Record<
+  'anyone' | 'local_network' | 'allowed_computer' | 'optional_sign_in' | 'signed_in' | 'permission',
+  readonly string[]
+> = {
   anyone: [],
   local_network: ['NOT_ON_LOCAL_NETWORK'],
   allowed_computer: ['NOT_ALLOWED'],
+  // A session that has ended only means "not signed in" here, never an error.
+  optional_sign_in: ['NOT_ALLOWED'],
   signed_in: ['NOT_ALLOWED', 'NOT_SIGNED_IN', 'SESSION_EXPIRED'],
   permission: ['NOT_ALLOWED', 'NOT_SIGNED_IN', 'SESSION_EXPIRED', 'NO_PERMISSION'],
 }
@@ -25,7 +30,11 @@ const ACCESS_CODES: Record<'anyone' | 'local_network' | 'allowed_computer' | 'si
 const GLOBAL_CODES = ['BAD_REQUEST', 'INTERNAL_ERROR', 'NOT_FOUND']
 
 function accessLevel(access: Access): keyof typeof ACCESS_CODES {
-  return access === 'anyone' || access === 'local_network' || access === 'allowed_computer' || access === 'signed_in'
+  return access === 'anyone' ||
+    access === 'local_network' ||
+    access === 'allowed_computer' ||
+    access === 'optional_sign_in' ||
+    access === 'signed_in'
     ? access
     : 'permission'
 }
@@ -38,6 +47,8 @@ function who(access: Access): string {
       return 'a computer on the office network, no sign-in'
     case 'allowed_computer':
       return 'an allowed computer, before sign-in'
+    case 'optional_sign_in':
+      return 'an allowed computer; more once signed in'
     case 'signed_in':
       return 'both'
     default:

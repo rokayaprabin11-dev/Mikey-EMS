@@ -11,6 +11,7 @@ import { registerReportRoutes } from './reports/routes.ts'
 import { registerStudentRoutes } from './students/routes.ts'
 import { registerConnectionRoutes } from './system/connections.ts'
 import { registerHealthRoute } from './system/health.ts'
+import { registerSchoolRoute } from './system/school.ts'
 
 // Fastify's own refusals, such as a body that is not valid JSON, carry a 4xx status code.
 function isRefusedByFastify(error: unknown): boolean {
@@ -39,6 +40,7 @@ export function buildApp(deps: AppDeps, options: { logger: boolean }): FastifyIn
   app.setNotFoundHandler((_request, reply) => reply.code(404).send(fail('NOT_FOUND', { what: 'address' }).toBody()))
 
   registerHealthRoute(app, deps)
+  registerSchoolRoute(app, deps)
   registerAuthRoutes(app, deps)
   registerConnectionRoutes(app, deps)
   registerDashboardRoutes(app, deps)

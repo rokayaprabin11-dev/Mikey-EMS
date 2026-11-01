@@ -73,6 +73,20 @@ export const schoolProfileSchema = z.object({
   pan: z.string().nullable(),
 })
 
+// Before sign-in only the school's name; signed in, its contact details too. Both are empty until
+// Computer 1 setup has saved the school.
+export const schoolResponseSchema = z.object({
+  name: z.string().nullable(),
+  details: z
+    .object({
+      address: z.string().nullable(),
+      phone: z.string().nullable(),
+      email: z.string().nullable(),
+      pan: z.string().nullable(),
+    })
+    .nullable(),
+})
+
 export const classesResponseSchema = z.object({
   classes: z.array(
     z.object({
@@ -84,6 +98,7 @@ export const classesResponseSchema = z.object({
 })
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>
+export type SchoolResponse = z.infer<typeof schoolResponseSchema>
 export type ConnectionRequestCreate = z.infer<typeof connectionRequestCreateSchema>
 export type ConnectionRequestResponse = z.infer<typeof connectionRequestResponseSchema>
 export type AllowedComputer = z.infer<typeof allowedComputerSchema>

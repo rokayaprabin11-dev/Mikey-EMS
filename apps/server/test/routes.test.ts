@@ -59,7 +59,7 @@ const WITHOUT_A_PERMISSION: Partial<Record<EndpointName, string>> = {
   login: 'signing in is how a session starts, from an allowed computer',
   session: 'anyone signed in may read their own session',
   logout: 'anyone signed in may sign out',
-  schoolProfile: 'every screen shows the school',
+  schoolProfile: 'the sign-in screen shows the school name; signed in, its contact details too',
   classes: 'the class filters on several screens',
 }
 

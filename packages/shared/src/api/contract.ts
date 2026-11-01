@@ -45,13 +45,15 @@ import {
   connectionRequestResponseSchema,
   connectionsResponseSchema,
   healthResponseSchema,
-  schoolProfileSchema,
+  schoolResponseSchema,
 } from './system.ts'
 
 export const API_PREFIX = '/api/v1'
 
-// Only the first three work without a session; everything except anyone and local_network needs an allowed computer.
-export type Access = PermissionKey | 'anyone' | 'local_network' | 'allowed_computer' | 'signed_in'
+// anyone, local_network and allowed_computer work without a session; optional_sign_in answers an
+// allowed computer and says more when its session is valid. Everything except anyone and
+// local_network needs an allowed computer.
+export type Access = PermissionKey | 'anyone' | 'local_network' | 'allowed_computer' | 'optional_sign_in' | 'signed_in'
 
 export interface Endpoint {
   readonly method: 'GET' | 'POST'
@@ -122,7 +124,7 @@ export const endpoints = {
     params: computerParams,
     response: 'empty',
   },
-  schoolProfile: { method: 'GET', path: '/school', access: 'signed_in', response: schoolProfileSchema },
+  schoolProfile: { method: 'GET', path: '/school', access: 'optional_sign_in', response: schoolResponseSchema },
   classes: { method: 'GET', path: '/classes', access: 'signed_in', response: classesResponseSchema },
 
   financeDashboard: {
