@@ -2,30 +2,29 @@
 // (docs/ARCHITECTURE.md, Topology).
 const DEFAULT_PORT = 3100
 
+// One part of a computer name such as MIKEY-SERVER.
+const NAME_PART = /^[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?$/
+
+// An IPv4 address written plainly (no leading zeros), or a computer name.
+function isHost(host: string): boolean {
+  if (/^\d+(?:\.\d+){3}$/.test(host)) {
+    return host.split('.').every((part) => String(Number(part)) === part && Number(part) <= 255)
+  }
+  return host.length <= 253 && !/^[\d.]+$/.test(host) && host.split('.').every((part) => NAME_PART.test(part))
+}
+
 // The server address as it is saved, `http://<host>:<port>`, from what was typed on the "Find
 // Computer 1" step: `192.168.1.10`, `192.168.1.10:3100` or `http://192.168.1.10:3100`. Null when it
-// is not an address. The office network has no certificates, so it is always plain http.
+// is not an address. The office network has no certificates, so it is always plain http. It is
+// read here rather than with URL because the renderer's and Node's URL readers accept different
+// things, and both sides must agree.
 export function serverUrlFrom(typed: string): string | null {
-  const text = typed.trim()
-  const withScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(text) ? text : `http://${text}`
-  if (text === '' || !URL.canParse(withScheme)) {
+  const match = /^(?:http:\/\/)?([^/:?#@\s]+)(?::(\d{1,5}))?\/?$/i.exec(typed.trim())
+  if (match === null) {
     return null
   }
-  const url = new URL(withScheme)
-  const onlyAnAddress =
-    url.protocol === 'http:' &&
-    url.hostname !== '' &&
-    url.username === '' &&
-    url.password === '' &&
-    url.pathname === '/' &&
-    url.search === '' &&
-    url.hash === ''
-  if (!onlyAnAddress) {
-    return null
-  }
-  // URL drops a typed :80, so look at the text to see whether a port was given.
-  if (!/:\d+\/?$/.test(withScheme)) {
-    url.port = String(DEFAULT_PORT)
-  }
-  return url.origin
+  const host = (match[1] ?? '').toLowerCase()
+  const port = match[2] === undefined ? DEFAULT_PORT : Number(match[2])
+  return isHost(host) && port >= 1 && port <= 65_535 ? `http://${host}:${port}` : null
 }
+
