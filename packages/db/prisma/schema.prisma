@@ -514,12 +514,15 @@ model ReceiptPrint {
   printedById String   @map("printed_by") @db.Uuid
   printedAt   DateTime @default(now()) @map("printed_at") @db.Timestamptz
   allowanceId String?  @unique @map("allowance_id") @db.Uuid
+  // Made by the desktop for an original print; the same key again returns the same PDF.
+  printKey    String?  @map("print_key") @db.Uuid
 
   receipt   Receipt                 @relation(fields: [receiptId], references: [id], onDelete: Restrict)
   printedBy User                    @relation(fields: [printedById], references: [id], onDelete: Restrict)
   allowance OriginalPrintAllowance? @relation(fields: [allowanceId], references: [id], onDelete: Restrict)
 
   @@unique([receiptId, printNo])
+  @@unique([receiptId, printKey])
   @@map("receipt_prints")
 }
 

@@ -203,6 +203,12 @@ export const originalPrintAllowanceSchema = z.object({
   reason: z.string().trim().min(1).max(500),
 })
 
+// Asking for a receipt's original. The desktop makes the key when it asks; asking again with the
+// same key from the same computer returns the same PDF and prints nothing new (DOMAIN_RULES §5).
+export const receiptPrintRequestSchema = z.object({
+  printKey: idempotencyKeySchema,
+})
+
 export const voidTargetSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('payment'),
@@ -254,5 +260,6 @@ export type VoidRequestCreate = z.infer<typeof voidRequestCreateSchema>
 export type VoidApproval = z.infer<typeof voidApprovalSchema>
 export type VoidDecline = z.infer<typeof voidDeclineSchema>
 export type OriginalPrintAllowance = z.infer<typeof originalPrintAllowanceSchema>
+export type ReceiptPrintRequest = z.infer<typeof receiptPrintRequestSchema>
 export type VoidRequest = z.infer<typeof voidRequestSchema>
 export type VoidRequestsResponse = z.infer<typeof voidRequestsResponseSchema>

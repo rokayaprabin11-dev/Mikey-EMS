@@ -6,6 +6,7 @@ import {
   kathmanduDate,
   printEn,
   type Receipt,
+  type ReceiptPrintRequest,
   type ReceiptSnapshot,
   receiptSnapshotSchema,
   schoolProfileSchema,
@@ -70,12 +71,36 @@ async function isVoided(tx: Db, paymentId: string): Promise<boolean> {
   return (await tx.voidRecord.count({ where: { paymentId } })) > 0
 }
 
+// Whether the receipt had been voided by `at`, so a print drawn again looks as it did then.
+async function voidedBy(tx: Db, paymentId: string, at: Date): Promise<boolean> {
+  return (await tx.voidRecord.count({ where: { paymentId, voidedAt: { lte: at } } })) > 0
+}
+
 // The original is printed once. One more original needs the Super Admin's allowance; every other
-// print is a copy (`/reprint`).
-export function printOriginal(deps: AppDeps, input: ReceiptInput): Promise<Buffer> {
-  const { params, session, now, computer } = input
+// print is a copy (`/reprint`). The desktop sends a key with each ask: when an answer is lost, it
+// asks again with the same key and gets the same PDF, rather than spending the one original.
+export function printOriginal(deps: AppDeps, input: ReceiptInput & { body: ReceiptPrintRequest }): Promise<Buffer> {
+  const { params, body, session, now, computer } = input
   return deps.db.$transaction(async (tx) => {
     const receipt = await lockReceipt(tx, params.paymentId)
+    const asked = await tx.receiptPrint.findUnique({
+      where: { receiptId_printKey: { receiptId: receipt.id, printKey: body.printKey } },
+      select: { computer: true, printedAt: true },
+    })
+    if (asked !== null) {
+      // The same ask from another computer is not a repeat: that computer has its own key.
+      if (asked.computer !== computer) {
+        throw fail('ALREADY_PRINTED')
+      }
+      const voidedThen = await voidedBy(tx, params.paymentId, asked.printedAt)
+      return renderReceipt(receipt.snapshot, {
+        printedAt: asked.printedAt,
+        computer,
+        copy: null,
+        voided: voidedThen,
+        test: false,
+      })
+    }
     const printed = await printNumbers(tx, receipt.id)
     let allowanceId: string | null = null
     if (printed.length > 0) {
@@ -99,6 +124,7 @@ export function printOriginal(deps: AppDeps, input: ReceiptInput): Promise<Buffe
         printedById: session.user.id,
         printedAt: now,
         allowanceId,
+        printKey: body.printKey,
       },
     })
     return pdf

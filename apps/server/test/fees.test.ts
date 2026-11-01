@@ -61,7 +61,7 @@ async function collected(body: object, on: TestServer = server, as = token) {
 }
 
 function print(paymentId: string) {
-  return server.call({ method: 'POST', path: `/payments/${paymentId}/print`, ip: COUNTER, token })
+  return server.call({ method: 'POST', path: `/payments/${paymentId}/print`, ip: COUNTER, token, body: { printKey: randomUUID() } })
 }
 
 // @types/pdfkit types the default export as a document rather than a class with a prototype.

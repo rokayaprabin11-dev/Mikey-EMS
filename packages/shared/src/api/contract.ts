@@ -27,6 +27,7 @@ import {
   originalPrintAllowanceSchema,
   paymentsListQuerySchema,
   paymentsListResponseSchema,
+  receiptPrintRequestSchema,
   receiptSchema,
   studentDuesResponseSchema,
   voidApprovalSchema,
@@ -174,6 +175,7 @@ export const endpoints = {
     path: '/payments/:paymentId/print',
     access: 'fees.collect',
     params: paymentParams,
+    body: receiptPrintRequestSchema,
     response: 'pdf',
   },
   reprintReceipt: {

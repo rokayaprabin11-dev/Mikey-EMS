@@ -63,6 +63,11 @@ function post(as: Caller, path: string, body?: object) {
   return as.on.call({ method: 'POST', path, token: as.token, ip: as.ip, body })
 }
 
+// Asks for the original as the desktop does, with a key of its own unless one is given.
+function printOriginal(as: Caller, paymentId: string, printKey: string = randomUUID()) {
+  return post(as, `/payments/${paymentId}/print`, { printKey })
+}
+
 function get(as: Caller, path: string) {
   return as.on.call({ method: 'GET', path, token: as.token, ip: as.ip })
 }
@@ -95,7 +100,7 @@ const pdfDocument = (PDFDocument as unknown as { prototype: PDFKit.PDFDocument }
 async function printed(as: Caller, paymentId: string, which: 'print' | 'reprint') {
   const text = vi.spyOn(pdfDocument, 'text')
   try {
-    const response = await post(as, `/payments/${paymentId}/${which}`)
+    const response = which === 'print' ? await printOriginal(as, paymentId) : await post(as, `/payments/${paymentId}/reprint`)
     return { response, text: text.mock.calls.map(([value]) => String(value)).join('') }
   } finally {
     text.mockRestore()
@@ -217,7 +222,7 @@ describe('reprints', () => {
 
   it('numbers two copies asked for at the same moment one after the other', async () => {
     const { paymentId } = await paidReceipt()
-    await post(asAccountant(), `/payments/${paymentId}/print`)
+    await printOriginal(asAccountant(), paymentId)
 
     const answers = await Promise.all([
       post(asAccountant(), `/payments/${paymentId}/reprint`),
@@ -229,11 +234,59 @@ describe('reprints', () => {
   })
 })
 
+describe('the print key', () => {
+  it('gives the same PDF again for the same key from the same computer, and prints nothing new', async () => {
+    const { paymentId } = await paidReceipt()
+    const printKey = randomUUID()
+    const first = await printOriginal(asAccountant(), paymentId, printKey)
+    expect(first.statusCode, first.body).toBe(200)
+
+    // The answer was lost; the desktop asks again a minute later with the same key.
+    server.advanceMinutes(1)
+    const again = await printOriginal(asAccountant(), paymentId, printKey)
+    expect(again.statusCode, again.body).toBe(200)
+    expect(again.rawPayload.equals(first.rawPayload)).toBe(true)
+
+    const prints = await server.db.receiptPrint.findMany({ where: { receipt: { paymentId } } })
+    expect(prints).toHaveLength(1)
+    expect(prints[0]).toMatchObject({ printNo: 1, printKey, computer: 2 })
+  })
+
+  it('refuses another key once the original is printed, and the same key from the other computer', async () => {
+    const { paymentId } = await paidReceipt()
+    const printKey = randomUUID()
+    expect((await printOriginal(asAccountant(), paymentId, printKey)).statusCode).toBe(200)
+    expect(errorOf(await printOriginal(asAccountant(), paymentId))).toMatchObject({ status: 409, code: 'ALREADY_PRINTED' })
+    expect(errorOf(await printOriginal(asAdmin(), paymentId, printKey))).toMatchObject({ status: 409, code: 'ALREADY_PRINTED' })
+    expect(await server.db.receiptPrint.count({ where: { receipt: { paymentId } } })).toBe(1)
+  })
+
+  it('keeps each original to its own key when the Super Admin allows one more', async () => {
+    const { paymentId } = await paidReceipt()
+    const firstKey = randomUUID()
+    const first = await printOriginal(asAccountant(), paymentId, firstKey)
+    expect((await post(asAdmin(), `/payments/${paymentId}/allow-original`, { reason: 'The printer jammed.' })).statusCode).toBe(204)
+
+    const secondKey = randomUUID()
+    const second = await printOriginal(asAccountant(), paymentId, secondKey)
+    expect(second.statusCode, second.body).toBe(200)
+    expect((await printOriginal(asAccountant(), paymentId, secondKey)).rawPayload.equals(second.rawPayload)).toBe(true)
+    expect((await printOriginal(asAccountant(), paymentId, firstKey)).rawPayload.equals(first.rawPayload)).toBe(true)
+    expect(await server.db.receiptPrint.count({ where: { receipt: { paymentId } } })).toBe(2)
+  })
+
+  it('needs a key to print the original', async () => {
+    const { paymentId } = await paidReceipt()
+    expect(errorOf(await post(asAccountant(), `/payments/${paymentId}/print`))).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' })
+    expect(await server.db.receiptPrint.count({ where: { receipt: { paymentId } } })).toBe(0)
+  })
+})
+
 describe('one more original', () => {
   it('lets the Super Admin allow one more original after a failed print, with a reason, used once', async () => {
     const { paymentId } = await paidReceipt()
-    await post(asAccountant(), `/payments/${paymentId}/print`)
-    expect(errorOf(await post(asAccountant(), `/payments/${paymentId}/print`)).code).toBe('ALREADY_PRINTED')
+    await printOriginal(asAccountant(), paymentId)
+    expect(errorOf(await printOriginal(asAccountant(), paymentId)).code).toBe('ALREADY_PRINTED')
 
     const allow = (as: Caller, body: object) => post(as, `/payments/${paymentId}/allow-original`, body)
     expect(errorOf(await allow(asAccountant(), { reason: 'Printer jammed' }))).toMatchObject({
@@ -257,7 +310,7 @@ describe('one more original', () => {
     expect(again.response.statusCode).toBe(200)
     expect(again.text).toContain('Original')
     expect(await server.db.receiptPrint.findFirst({ where: { allowanceId: allowance.id } })).toMatchObject({ printNo: 2 })
-    expect(errorOf(await post(asAccountant(), `/payments/${paymentId}/print`)).code).toBe('ALREADY_PRINTED')
+    expect(errorOf(await printOriginal(asAccountant(), paymentId)).code).toBe('ALREADY_PRINTED')
 
     // Each permission is its own, with its own reason and audit row, and the list counts them.
     expect((await allow(asAdmin(), { reason: 'Jammed again on the second original.' })).statusCode).toBe(204)
@@ -341,7 +394,7 @@ describe('void requests', () => {
 describe('direct void', () => {
   it('lets the Super Admin void in one step, with a reason, kept as a direct request and a void', async () => {
     const { paymentId } = await paidReceipt()
-    await post(asAccountant(), `/payments/${paymentId}/print`)
+    await printOriginal(asAccountant(), paymentId)
 
     const response = await post(asAdmin(), '/voids', {
       target: { type: 'payment', id: paymentId },
