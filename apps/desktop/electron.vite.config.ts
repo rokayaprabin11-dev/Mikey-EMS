@@ -8,6 +8,9 @@ export default defineConfig({
   main: {
     build: { lib: { entry: 'electron/main/index.ts' } },
   },
+  preload: {
+    build: { lib: { entry: 'electron/preload/index.ts' } },
+  },
   renderer: {
     root: 'src',
     build: { rolldownOptions: { input: resolve('src/index.html') } },
