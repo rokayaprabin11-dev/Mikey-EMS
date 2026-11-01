@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 
 import { registerAccountRoutes } from './accounts/routes.ts'
+import { registerAttendanceRoutes } from './attendance/routes.ts'
 import { registerAuthRoutes } from './auth/routes.ts'
 import { registerDashboardRoutes } from './dashboard/routes.ts'
 import type { AppDeps } from './deps.ts'
@@ -45,5 +46,6 @@ export function buildApp(deps: AppDeps, options: { logger: boolean }): FastifyIn
   registerFeeRoutes(app, deps)
   registerAccountRoutes(app, deps)
   registerReportRoutes(app, deps)
+  registerAttendanceRoutes(app, deps)
   return app
 }

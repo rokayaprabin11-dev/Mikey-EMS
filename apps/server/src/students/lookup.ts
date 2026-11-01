@@ -24,6 +24,13 @@ const ROLL_DIGITS = 3
 const NAME_AND_ID_WORDS = Prisma.sql`to_tsvector('simple'::regconfig, regexp_replace("full_name" || ' ' || "student_code", '[^[:alnum:]]+', ' ', 'g'))`
 const PHONE_DIGITS = Prisma.sql`to_tsvector('simple'::regconfig, regexp_replace("phone", '[^0-9]', '', 'g') || ' ' || regexp_replace(coalesce("alt_phone", ''), '[^0-9]', '', 'g'))`
 
+// Each student's latest enrollment (by the session's start date), as fee collection uses it.
+export const LATEST_ENROLLMENTS = Prisma.sql`
+  SELECT DISTINCT ON (e.student_id) e.student_id, e.section_id, e.roll_no
+  FROM student_enrollments e
+  JOIN academic_sessions a ON a.id = e.session_id
+  ORDER BY e.student_id, a.start_date DESC`
+
 interface FoundRow {
   id: string
   code: string
@@ -63,12 +70,7 @@ function matching(text: string): Prisma.Sql | null {
 // instead of testing every student.
 function findStudents(db: Db, matched: Prisma.Sql | null, conditions: Prisma.Sql, limit: number | null): Promise<FoundRow[]> {
   return db.$queryRaw<FoundRow[]>`
-    WITH latest AS (
-      SELECT DISTINCT ON (e.student_id) e.student_id, e.section_id, e.roll_no
-      FROM student_enrollments e
-      JOIN academic_sessions a ON a.id = e.session_id
-      ORDER BY e.student_id, a.start_date DESC
-    )${matched === null ? Prisma.empty : Prisma.sql`, matched AS MATERIALIZED (${matched})`}
+    WITH latest AS (${LATEST_ENROLLMENTS})${matched === null ? Prisma.empty : Prisma.sql`, matched AS MATERIALIZED (${matched})`}
     SELECT s.id, s.student_code AS code, s.full_name, s.status::text AS status, l.roll_no,
       c.name AS class_name, sec.name AS section_name
     FROM students s

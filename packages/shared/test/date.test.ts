@@ -12,6 +12,7 @@ import {
   formatBsWithAd,
   formatKathmanduTime,
   InvalidDateError,
+  kathmanduClock,
   kathmanduDate,
   parseBsDate,
 } from '../src/date.ts'
@@ -159,3 +160,15 @@ describe('formatKathmanduTime', () => {
     expect(formatKathmanduTime(new Date(instant))).toBe(time)
   })
 })
+
+describe('kathmanduClock', () => {
+  it.each([
+    ['2026-10-31T05:13:00.000Z', '10:58'],
+    ['2026-10-31T10:14:00.000Z', '15:59'],
+    ['2026-10-31T10:15:00.000Z', '16:00'],
+    ['2026-10-30T18:15:00.000Z', '00:00'],
+  ])('shows %s as %s in Kathmandu', (instant, time) => {
+    expect(kathmanduClock(new Date(instant))).toBe(time)
+  })
+})
+

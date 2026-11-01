@@ -110,6 +110,9 @@ Flow: find student → show unpaid dues oldest first → tick dues and set amoun
   - Before day close a person without scans is **"Not scanned yet"**, never `A`. **[test]**
   - A single scan never counts as a full day when check-out is required *(setting)*. **[test]**
 - Corrections are stored separately (person, date, new status, reason, user). They override the computed status but never change raw events. Reports mark corrected days.
+- **Attendance summary** (`GET /attendance/summary`, `attendance.view`): counts per class for one day, read from the computed statuses with any corrections over them (the latest correction wins). Counts only; no student is named. Active students, in the class of their latest enrollment. The job that computes statuses from scans comes with the Super Admin build; the summary only reads them. **[test]**
+- The day counts as closed once its date has passed, or today has reached the students' day-close time in the attendance rules (4:00 PM when none is set). Until then a student with no status, or marked absent, counts as "Not scanned yet". **[test]** an attendance summary before day close shows no absentees. On a holiday nobody counts as absent or waiting to scan.
+- "Last scans pulled" in the summary is the health check's `lastSyncAt`: scans from every connected device are in up to then.
 
 ## 9. Permissions
 

@@ -1,7 +1,7 @@
 import { schoolProfileSchema } from '@mikey/shared'
 import type { FastifyInstance } from 'fastify'
 
-import type { AppDeps } from '../deps.ts'
+import type { AppDeps, Db } from '../deps.ts'
 import { registerRoute } from '../http/route.ts'
 import { readSetting } from '../settings.ts'
 import { isAllowedComputer } from './allow-list.ts'
@@ -24,9 +24,17 @@ function deviceStatus(devices: readonly DevicePulls[]): 'connected' | 'not_respo
   return devices.every(lastPullWorked) ? 'connected' : 'not_responding'
 }
 
+// Nothing is connected to a file import, so only devices pulled over a connection count.
+export function pulledDevices(db: Db): Promise<DevicePulls[]> {
+  return db.device.findMany({
+    where: { status: 'active', connection: { not: 'file' } },
+    select: { lastSyncAt: true, lastSuccessAt: true },
+  })
+}
+
 // lastSyncAt: scans from every device are in up to this moment (the oldest of their last pulls
 // that worked), or empty while any device has never been pulled. lastAttemptAt: the newest try.
-function pullTimes(devices: readonly DevicePulls[]): { lastSyncAt: string | null; lastAttemptAt: string | null } {
+export function pullTimes(devices: readonly DevicePulls[]): { lastSyncAt: string | null; lastAttemptAt: string | null } {
   const successes = devices.flatMap((device) => (device.lastSuccessAt === null ? [] : [device.lastSuccessAt.getTime()]))
   const attempts = devices.flatMap((device) => (device.lastSyncAt === null ? [] : [device.lastSyncAt.getTime()]))
   const everyDeviceWorked = devices.length > 0 && successes.length === devices.length
@@ -49,11 +57,7 @@ export function registerHealthRoute(app: FastifyInstance, deps: AppDeps): void {
 
     const [allowed, devices, profile] = await Promise.all([
       isAllowedComputer(deps.db, ip),
-      // Nothing is connected to a file import, so only devices pulled over a connection count.
-      deps.db.device.findMany({
-        where: { status: 'active', connection: { not: 'file' } },
-        select: { lastSyncAt: true, lastSuccessAt: true },
-      }),
+      pulledDevices(deps.db),
       readSetting(deps.db, 'school.profile', schoolProfileSchema),
     ])
     return {
