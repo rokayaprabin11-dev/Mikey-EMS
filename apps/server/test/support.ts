@@ -5,8 +5,6 @@ import { createDb, type PrismaClient, type Student, type User } from '@mikey/db'
 import { API_PREFIX, bsMonthName, bsToAd, errorBodySchema, loginResponseSchema } from '@mikey/shared'
 import { hash } from '@node-rs/argon2'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
-import { inject } from 'vitest'
-
 import { buildApp } from '../src/app.ts'
 
 const COMPUTER_1 = '127.0.0.1'
@@ -43,7 +41,21 @@ export interface TestServer {
   close: () => Promise<void>
 }
 
-export function startTestServer(databaseUrl = inject('testDatabaseUrl')): TestServer {
+let fileDatabaseUrl: string | undefined
+
+// Set by test/own-database.ts before each test file runs.
+export function useTestDatabase(url: string): void {
+  fileDatabaseUrl = url
+}
+
+function testDatabaseUrl(): string {
+  if (fileDatabaseUrl === undefined) {
+    throw new Error('This test file has no database of its own; test/own-database.ts makes one.')
+  }
+  return fileDatabaseUrl
+}
+
+export function startTestServer(databaseUrl = testDatabaseUrl()): TestServer {
   const db = createDb(databaseUrl)
   let now = new Date('2026-10-31T04:15:00.000Z')
   const app: FastifyInstance = buildApp(

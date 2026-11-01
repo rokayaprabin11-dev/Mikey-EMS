@@ -24,12 +24,16 @@ function withDatabase(url: string, database: string): string {
   return copy.toString()
 }
 
-// A test database is only ever reset by dropping and recreating it: posted rows are permanent,
-// and tests never switch the triggers off.
-export async function createFreshTestDatabase(name: `mikeyems_test${string}`): Promise<string> {
+function checkTestDatabaseName(name: string): void {
   if (!/^mikeyems_test(_[a-z]+)?$/.test(name)) {
     throw new Error(`"${name}" is not a test database name.`)
   }
+}
+
+// A test database is only ever reset by dropping and recreating it: posted rows are permanent,
+// and tests never switch the triggers off.
+export async function createFreshTestDatabase(name: `mikeyems_test${string}`): Promise<string> {
+  checkTestDatabaseName(name)
   const devUrl = devDatabaseUrl()
   const admin = createDb(withDatabase(devUrl, 'postgres'))
   try {
@@ -46,4 +50,20 @@ export async function createFreshTestDatabase(name: `mikeyems_test${string}`): P
     stdio: 'pipe',
   })
   return url
+}
+
+// A fresh copy of a migrated test database, made from it as a template. The template must have no
+// open connections while it is copied.
+export async function copyTestDatabase(templateUrl: string, name: `mikeyems_test${string}`): Promise<string> {
+  const template = new URL(templateUrl).pathname.slice(1)
+  checkTestDatabaseName(template)
+  checkTestDatabaseName(name)
+  const admin = createDb(withDatabase(templateUrl, 'postgres'))
+  try {
+    await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${name}" TEMPLATE "${template}"`)
+  } finally {
+    await admin.$disconnect()
+  }
+  return withDatabase(templateUrl, name)
 }
