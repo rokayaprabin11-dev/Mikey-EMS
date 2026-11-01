@@ -452,9 +452,12 @@ describe('the day-close summary', () => {
           ...method,
           allocations: [{ kind: 'fee', feeDueId, amount: 355_000 }],
         })
+      const opening = dayCloseStatusSchema.parse(
+        (await get(counter, `/day-closes/${bsToAd({ year: 2083, month: 8, day: 14 })}`)).json(),
+      ).expectedCash
       expect((await pay(kartik.id, { method: 'cash' })).statusCode).toBe(200)
       other.advanceMinutes(1)
-      expect((await pay(mangsir.id, { method: 'fonepay', reference: 'FP-2231' })).statusCode).toBe(200)
+      const fonepay = collectPaymentResponseSchema.parse((await pay(mangsir.id, { method: 'fonepay', reference: 'FP-2231' })).json()).receipt
       other.advanceMinutes(1)
       await saved(counter, '/incomes', entry(categories.interest, school.cashId, 1000, 'Old furniture sold'))
       other.advanceMinutes(1)
@@ -463,6 +466,11 @@ describe('the day-close summary', () => {
       const typedTwice = await saved(counter, '/expenses', entry(categories.utilities, school.cashId, 260, 'Typed twice'))
       other.advanceMinutes(1)
       await approveVoid({ type: 'expense', id: typedTwice.id }, counter, office)
+      other.advanceMinutes(1)
+      await approveVoid({ type: 'payment', id: fonepay.paymentId }, counter, office)
+      other.advanceMinutes(1)
+      const moved = await post(counter, '/transfers', { idempotencyKey: randomUUID(), fromAccountId: school.cashId, toAccountId: school.bankId, amount: 50_000 })
+      expect(moved.statusCode, moved.body).toBe(200)
       other.advanceMinutes(1)
 
       const { expectedCash } = dayCloseStatusSchema.parse((await get(counter, `/day-closes/${date}`)).json())
@@ -487,10 +495,14 @@ describe('the day-close summary', () => {
         expectedCash,
         difference: 130_000 - expectedCash,
         note: 'One note was torn.',
+        // In: the cash receipt, the income and the voided expense coming back. Out: the two
+        // expenses and the money moved to the bank. The Fonepay receipt and its void are banked.
+        cashBook: { opening, moneyIn: 481_000, moneyOut: 121_000, closing: opening + 360_000 },
         feesByMethod: [
-          { method: 'cash', receiptCount: 1, amount: 355_000 },
-          { method: 'fonepay', receiptCount: 1, amount: 355_000 },
+          { method: 'cash', receiptCount: 1, gross: 355_000, voided: 0, net: 355_000 },
+          { method: 'fonepay', receiptCount: 1, gross: 355_000, voided: 355_000, net: 0 },
         ],
+        transfers: [{ fromAccount: 'Cash in hand', toAccount: 'Current account', amount: 50_000, note: null }],
         incomeByCategory: [{ name: 'Bank interest', amount: 100_000 }],
         expensesByCategory: [
           { name: 'Stationery and teaching', amount: 45_000 },
@@ -504,8 +516,16 @@ describe('the day-close summary', () => {
             reason: 'wrong_amount',
             voidedBy: 'Test Super Admin',
           },
+          {
+            target: { type: 'payment', receiptNo: fonepay.snapshot.receiptNo },
+            accountName: 'Current account',
+            amount: 355_000,
+            reason: 'wrong_amount',
+            voidedBy: 'Test Super Admin',
+          },
         ],
       })
+      expect(expectedCash).toBe(opening + 360_000)
 
       const original = await summary(counter, date)
       expect(original.response.statusCode).toBe(200)
@@ -516,6 +536,13 @@ describe('the day-close summary', () => {
         'Original',
         '15 Mangsir 2083',
         'Test Accountant',
+        'Cash book',
+        'Opening balance',
+        'Money in',
+        '4,810.00',
+        'Money out',
+        '1,210.00',
+        'Closing balance',
         'Rs. 1,000',
         'Counted',
         '1,300.00',
@@ -525,12 +552,17 @@ describe('the day-close summary', () => {
         formatReceiptAmount(Math.abs(130_000 - expectedCash)),
         'One note was torn.',
         'Fonepay QR',
+        'Net (Rs.)',
         '7,100.00',
+        '3,550.00',
         'Bank interest',
         'Stationery and teaching',
         'Utilities',
         'Void of expense: Typed twice. Wrong amount, voided by Test Super Admin.',
-        'Cash in hand',
+        `Void of receipt ${fonepay.snapshot.receiptNo}. Wrong amount, voided by Test Super Admin.`,
+        'Moved between accounts',
+        'Cash in hand to Current account',
+        '500.00',
       ]) {
         expect(original.text).toContain(text)
       }

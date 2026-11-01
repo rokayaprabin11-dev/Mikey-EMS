@@ -16,30 +16,37 @@ const words = printEn.dayClose
 
 const SIZE = 12
 const TITLE_SIZE = 14
-const MIDDLE_WIDTH = 120
-const AMOUNT_WIDTH = 110
 const CELL_PADDING = 4
 const ROW_PADDING = 4
 const TOTALS_WIDTH = 260
-const LABEL_X = LEFT + CELL_PADDING
-const LABEL_WIDTH = WIDTH - MIDDLE_WIDTH - AMOUNT_WIDTH - 2 * CELL_PADDING
-const MIDDLE_X = RIGHT - AMOUNT_WIDTH - MIDDLE_WIDTH
+const AMOUNT = 105
 
-interface Row {
-  label: string
-  middle: string
-  amount: number
+interface Column {
+  header: string
+  // 0 takes what is left and wraps its text.
+  width: number
+  align: 'left' | 'center' | 'right'
 }
 
 interface Table {
   title: string
-  columns: readonly [string, string, string]
-  rows: readonly Row[]
-  total: Row | null
+  columns: readonly Column[]
+  rows: readonly (readonly string[])[]
+  total: readonly string[] | null
 }
 
-function sum(items: readonly { amount: number }[]): number {
-  return items.reduce((total, item) => total + item.amount, 0)
+function sum(amounts: readonly number[]): number {
+  return amounts.reduce((total, amount) => total + amount, 0)
+}
+
+// Amounts are never printed with a minus sign: a method that paid back more than it took says so,
+// and so does a balance below zero.
+function net(amount: number): string {
+  return amount < 0 ? words.back(formatReceiptAmount(-amount)) : formatReceiptAmount(amount)
+}
+
+function balance(amount: number): string {
+  return amount < 0 ? words.belowZero(formatReceiptAmount(-amount)) : formatReceiptAmount(amount)
 }
 
 function voidText(item: DayCloseSnapshot['voids'][number]): string {
@@ -58,6 +65,8 @@ function voidText(item: DayCloseSnapshot['voids'][number]): string {
 class DayCloseLayout extends A5Layout {
   private readonly snapshot: DayCloseSnapshot
   private readonly print: PrintDetails
+  private widths: number[] = []
+  private columns: readonly Column[] = []
 
   constructor(doc: PDFKit.PDFDocument, snapshot: DayCloseSnapshot, print: PrintDetails) {
     super(doc)
@@ -66,23 +75,35 @@ class DayCloseLayout extends A5Layout {
   }
 
   draw(): void {
-    const { feesByMethod, incomeByCategory, expensesByCategory, voids } = this.snapshot
+    const { feesByMethod, incomeByCategory, expensesByCategory, transfers, voids } = this.snapshot
+    const amountColumn = { header: words.amountColumn, width: AMOUNT, align: 'right' } as const
     this.header(this.snapshot.school, words.title, this.print.copy)
     this.details()
+    this.cashBook()
     this.cashCount()
     this.table({
       title: words.fees,
-      columns: [words.method, words.receipts, words.amountColumn],
-      rows: feesByMethod.map((item) => ({
-        label: printEn.paymentMethods[item.method],
-        middle: String(item.receiptCount),
-        amount: item.amount,
-      })),
-      total: {
-        label: words.total,
-        middle: String(feesByMethod.reduce((total, item) => total + item.receiptCount, 0)),
-        amount: sum(feesByMethod),
-      },
+      columns: [
+        { header: words.method, width: 0, align: 'left' },
+        { header: words.receipts, width: 66, align: 'center' },
+        { header: words.received, width: 95, align: 'right' },
+        { header: words.voided, width: 95, align: 'right' },
+        { header: words.net, width: AMOUNT, align: 'right' },
+      ],
+      rows: feesByMethod.map((item) => [
+        printEn.paymentMethods[item.method],
+        String(item.receiptCount),
+        formatReceiptAmount(item.gross),
+        formatReceiptAmount(item.voided),
+        net(item.net),
+      ]),
+      total: [
+        words.total,
+        String(sum(feesByMethod.map((item) => item.receiptCount))),
+        formatReceiptAmount(sum(feesByMethod.map((item) => item.gross))),
+        formatReceiptAmount(sum(feesByMethod.map((item) => item.voided))),
+        net(sum(feesByMethod.map((item) => item.net))),
+      ],
     })
     for (const [title, items] of [
       [words.income, incomeByCategory],
@@ -90,15 +111,29 @@ class DayCloseLayout extends A5Layout {
     ] as const) {
       this.table({
         title,
-        columns: [words.category, '', words.amountColumn],
-        rows: items.map((item) => ({ label: item.name, middle: '', amount: item.amount })),
-        total: { label: words.total, middle: '', amount: sum(items) },
+        columns: [{ header: words.category, width: 0, align: 'left' }, amountColumn],
+        rows: items.map((item) => [item.name, formatReceiptAmount(item.amount)]),
+        total: [words.total, formatReceiptAmount(sum(items.map((item) => item.amount)))],
       })
     }
+    // Money moved between accounts is neither income nor an expense, so it is not added up.
+    this.table({
+      title: words.transfers,
+      columns: [{ header: words.moved, width: 0, align: 'left' }, amountColumn],
+      rows: transfers.map((item) => {
+        const moved = words.transferLine(item.fromAccount, item.toAccount)
+        return [item.note === null ? moved : `${moved}. ${item.note}`, formatReceiptAmount(item.amount)]
+      }),
+      total: null,
+    })
     this.table({
       title: words.voids,
-      columns: [words.void, words.account, words.amountColumn],
-      rows: voids.map((item) => ({ label: voidText(item), middle: item.accountName, amount: item.amount })),
+      columns: [
+        { header: words.void, width: 0, align: 'left' },
+        { header: words.account, width: 120, align: 'center' },
+        amountColumn,
+      ],
+      rows: voids.map((item) => [voidText(item), item.accountName, formatReceiptAmount(item.amount)]),
       total: null,
     })
     this.endPage()
@@ -126,45 +161,71 @@ class DayCloseLayout extends A5Layout {
     this.y += 12 * LINE_HEIGHT
   }
 
+  // Labels with their amounts, the amounts lined up on the right; the last line is bold under a
+  // rule. `width` is measured back from the right edge.
+  private totalsBlock(lines: readonly (readonly [string, string | null])[], width: number, gap: number): void {
+    const lineHeight = SIZE * LINE_HEIGHT
+    const x = RIGHT - width
+    this.makeRoom(gap + lines.length * (lineHeight + 4) + 6)
+    this.y += gap
+    lines.forEach(([label, amount], index) => {
+      const last = index === lines.length - 1
+      if (last) {
+        this.rule(x, RIGHT, this.y + 0.5, 1, INK)
+        this.y += 1 + 5
+      }
+      this.line([{ text: label, bold: last }], x, this.y, SIZE)
+      if (amount !== null) {
+        this.line([{ text: amount, bold: last }], x, this.y, SIZE, { align: 'right', width })
+      }
+      this.y += lineHeight + (last ? 0 : 4)
+    })
+  }
+
+  // The cash account's day, ending with the balance the count is checked against.
+  private cashBook(): void {
+    const { opening, moneyIn, moneyOut, closing } = this.snapshot.cashBook
+    this.title(words.cashBook, GAP + TITLE_SIZE * LINE_HEIGHT + 4 + 4 * (SIZE * LINE_HEIGHT + 4))
+    this.totalsBlock(
+      [
+        [words.opening, balance(opening)],
+        [words.moneyIn, formatReceiptAmount(moneyIn)],
+        [words.moneyOut, formatReceiptAmount(moneyOut)],
+        [words.closing, formatReceiptAmount(closing)],
+      ],
+      WIDTH,
+      0,
+    )
+  }
+
   // The notes counted, then the count against the cashbook and the note about any difference.
   private cashCount(): void {
     const { counts, countedCash, expectedCash, difference, note } = this.snapshot
     this.table({
       title: words.cashCount,
-      columns: [words.noteOrCoin, words.count, words.amountColumn],
-      rows: counts.map((item) => ({
-        label: formatRupees(item.note * 100),
-        middle: String(item.count),
-        amount: item.note * 100 * item.count,
-      })),
+      columns: [
+        { header: words.noteOrCoin, width: 0, align: 'left' },
+        { header: words.count, width: 120, align: 'center' },
+        { header: words.amountColumn, width: AMOUNT, align: 'right' },
+      ],
+      rows: counts.map((item) => [formatRupees(item.note * 100), String(item.count), formatReceiptAmount(item.note * 100 * item.count)]),
       total: null,
     })
-
-    const lineHeight = SIZE * LINE_HEIGHT
     let differenceLabel: string = words.noDifference
     if (difference < 0) {
       differenceLabel = words.short
     } else if (difference > 0) {
       differenceLabel = words.over
     }
-    this.makeRoom(GAP + 3 * lineHeight + 4 + 4 + 1 + 5)
-    const x = RIGHT - TOTALS_WIDTH
-    const row = (label: string, amount: number | null, bold: boolean): void => {
-      this.line([{ text: label, bold }], x, this.y, SIZE)
-      if (amount !== null) {
-        this.line([{ text: formatReceiptAmount(amount), bold }], x, this.y, SIZE, { align: 'right', width: TOTALS_WIDTH })
-      }
-    }
-    this.y += GAP
-    row(words.counted, countedCash, false)
-    this.y += lineHeight + 4
-    row(words.cashbookSays, expectedCash, false)
-    this.y += lineHeight + 4
-    this.rule(x, RIGHT, this.y + 0.5, 1, INK)
-    this.y += 1 + 5
-    row(differenceLabel, difference === 0 ? null : Math.abs(difference), true)
-    this.y += lineHeight
-
+    this.totalsBlock(
+      [
+        [words.counted, formatReceiptAmount(countedCash)],
+        [words.cashbookSays, formatReceiptAmount(expectedCash)],
+        [differenceLabel, difference === 0 ? null : formatReceiptAmount(Math.abs(difference))],
+      ],
+      TOTALS_WIDTH,
+      GAP,
+    )
     if (note !== null) {
       const runs: Run[] = [{ text: `${words.note} ` }, { text: note, bold: true }]
       this.makeRoom(GAP + this.measure(runs, SIZE, WIDTH))
@@ -173,67 +234,91 @@ class DayCloseLayout extends A5Layout {
     }
   }
 
-  private rowHeight(row: Row): number {
-    return ROW_PADDING + Math.max(SIZE * LINE_HEIGHT, this.heightOf(row.label, 'bold', SIZE, LABEL_WIDTH)) + ROW_PADDING + 1
+  // A section title that never sits alone at the foot of a page: `room` is what must follow it.
+  private title(text: string, room: number): void {
+    this.makeRoom(room)
+    this.y += GAP
+    this.use('display', TITLE_SIZE)
+    this.doc.text(text, pt(LEFT), pt(this.y), { lineBreak: false })
+    this.y += TITLE_SIZE * LINE_HEIGHT + 4
   }
 
-  private tableHeader(columns: Table['columns']): void {
+  private useColumns(columns: readonly Column[]): void {
+    const fixed = columns.reduce((total, column) => total + column.width, 0)
+    this.columns = columns
+    this.widths = columns.map((column) => (column.width === 0 ? WIDTH - fixed : column.width))
+  }
+
+  private rowHeight(cells: readonly string[]): number {
+    const heights = cells.map((text, index) =>
+      this.columns[index]?.width === 0
+        ? this.heightOf(text, 'bold', SIZE, (this.widths[index] ?? 0) - 2 * CELL_PADDING)
+        : SIZE * LINE_HEIGHT,
+    )
+    return ROW_PADDING + Math.max(SIZE * LINE_HEIGHT, ...heights) + ROW_PADDING + 1
+  }
+
+  private cells(cells: readonly string[], textY: number, bold: boolean): void {
+    let x = LEFT
+    cells.forEach((text, index) => {
+      const column = this.columns[index]
+      const width = (this.widths[index] ?? 0) - 2 * CELL_PADDING
+      if (column?.width === 0) {
+        this.use(bold ? 'bold' : 'regular', SIZE)
+        this.doc.text(text, pt(x + CELL_PADDING), pt(textY), { width: pt(width) })
+      } else {
+        this.line([{ text: this.fit(text, bold ? 'bold' : 'regular', SIZE, width), bold }], x + CELL_PADDING, textY, SIZE, {
+          align: column?.align ?? 'left',
+          width,
+        })
+      }
+      x += this.widths[index] ?? 0
+    })
+  }
+
+  private tableHeader(): void {
     this.rule(LEFT, RIGHT, this.y + 0.5, 1, INK)
-    this.cells({ label: columns[0], middle: columns[1], amount: columns[2] }, this.y + 1 + ROW_PADDING, true)
+    this.cells(
+      this.columns.map((column) => column.header),
+      this.y + 1 + ROW_PADDING,
+      true,
+    )
     const bottom = this.y + 1 + ROW_PADDING + SIZE * LINE_HEIGHT + ROW_PADDING
     this.rule(LEFT, RIGHT, bottom + 0.5, 1, INK)
     this.y = bottom + 1
   }
 
-  private cells(row: { label: string; middle: string; amount: string }, textY: number, bold: boolean): void {
-    this.use(bold ? 'bold' : 'regular', SIZE)
-    this.doc.text(row.label, pt(LABEL_X), pt(textY), { width: pt(LABEL_WIDTH) })
-    this.line([{ text: this.fit(row.middle, bold ? 'bold' : 'regular', SIZE, MIDDLE_WIDTH), bold }], MIDDLE_X, textY, SIZE, {
-      align: 'center',
-      width: MIDDLE_WIDTH,
-    })
-    this.line([{ text: row.amount, bold }], RIGHT - AMOUNT_WIDTH, textY, SIZE, {
-      align: 'right',
-      width: AMOUNT_WIDTH - CELL_PADDING,
-    })
-  }
-
-  private row(row: Row, total: boolean): void {
-    const height = this.rowHeight(row)
+  private row(cells: readonly string[], total: boolean): void {
+    const height = this.rowHeight(cells)
+    if (this.makeRoom(height)) {
+      this.tableHeader()
+    }
     if (total) {
       this.rule(LEFT, RIGHT, this.y + 0.5, 1, INK)
     }
-    this.cells({ label: row.label, middle: row.middle, amount: formatReceiptAmount(row.amount) }, this.y + ROW_PADDING, total)
+    this.cells(cells, this.y + ROW_PADDING, total)
     if (!total) {
       this.rule(LEFT, RIGHT, this.y + height - 0.5, 1, RULE)
     }
     this.y += height
   }
 
-  // A titled table; "None." when it has no rows. The title never sits alone at the foot of a page.
+  // A titled table; "None." when it has no rows.
   private table(table: Table): void {
-    const titleHeight = GAP + TITLE_SIZE * LINE_HEIGHT + 4
+    this.useColumns(table.columns)
     const [first] = table.rows
-    const firstHeight = first === undefined ? SIZE * LINE_HEIGHT : 1 + 2 * ROW_PADDING + SIZE * LINE_HEIGHT + 1 + this.rowHeight(first)
-    this.makeRoom(titleHeight + firstHeight)
-    this.y += GAP
-    this.use('display', TITLE_SIZE)
-    this.doc.text(table.title, pt(LEFT), pt(this.y), { lineBreak: false })
-    this.y += TITLE_SIZE * LINE_HEIGHT + 4
+    const headerHeight = 1 + 2 * ROW_PADDING + SIZE * LINE_HEIGHT + 1
+    this.title(table.title, GAP + TITLE_SIZE * LINE_HEIGHT + 4 + (first === undefined ? SIZE * LINE_HEIGHT : headerHeight + this.rowHeight(first)))
     if (first === undefined) {
       this.line([{ text: words.none }], LEFT, this.y, SIZE)
       this.y += SIZE * LINE_HEIGHT
       return
     }
-    this.tableHeader(table.columns)
+    this.tableHeader()
     for (const row of table.rows) {
-      if (this.makeRoom(this.rowHeight(row))) {
-        this.tableHeader(table.columns)
-      }
       this.row(row, false)
     }
     if (table.total !== null) {
-      this.makeRoom(this.rowHeight(table.total))
       this.row(table.total, true)
     }
   }

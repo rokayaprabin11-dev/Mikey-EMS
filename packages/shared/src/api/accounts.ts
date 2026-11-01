@@ -218,12 +218,31 @@ export const dayCloseSnapshotSchema = z
     expectedCash: paisaSchema,
     difference: z.int(),
     note: z.string().nullable(),
-    // The day's receipts, including any voided the same day; each void is listed under voids.
+    // The cash account's day: the balance brought forward, the money in and out, and the balance
+    // the count is checked against.
+    cashBook: z.object({ opening: z.int(), moneyIn: paisaSchema, moneyOut: paisaSchema, closing: paisaSchema }),
+    // For each method: the day's receipts (gross, including any voided the same day), the voids
+    // made that day of receipts taken by it, and the net. Each void is also listed under voids.
     feesByMethod: z.array(
-      z.object({ method: paymentMethodSchema, receiptCount: z.int().positive(), amount: positivePaisaSchema }),
+      z.object({
+        method: paymentMethodSchema,
+        receiptCount: countSchema,
+        gross: paisaSchema,
+        voided: paisaSchema,
+        net: z.int(),
+      }),
     ),
     incomeByCategory: z.array(categoryTotalSchema),
     expensesByCategory: z.array(categoryTotalSchema),
+    // Money moved between accounts: neither income nor an expense.
+    transfers: z.array(
+      z.object({
+        fromAccount: z.string().min(1),
+        toAccount: z.string().min(1),
+        amount: positivePaisaSchema,
+        note: z.string().nullable(),
+      }),
+    ),
     voids: z.array(
       z.object({
         target: voidTargetTextSchema,
@@ -241,6 +260,18 @@ export const dayCloseSnapshotSchema = z
   .refine((snapshot) => snapshot.difference === snapshot.countedCash - snapshot.expectedCash, {
     error: 'The difference is not the counted cash minus the expected cash.',
     path: ['difference'],
+  })
+  .refine(
+    ({ cashBook }) => cashBook.closing === cashBook.opening + cashBook.moneyIn - cashBook.moneyOut,
+    { error: 'The closing balance is not the opening balance plus money in less money out.', path: ['cashBook', 'closing'] },
+  )
+  .refine((snapshot) => snapshot.cashBook.closing === snapshot.expectedCash, {
+    error: 'The closing balance is not the cash the cashbook expects.',
+    path: ['cashBook', 'closing'],
+  })
+  .refine((snapshot) => snapshot.feesByMethod.every((item) => item.net === item.gross - item.voided), {
+    error: 'A net by method is not its gross less its voids.',
+    path: ['feesByMethod'],
   })
 
 export type AccountKind = z.infer<typeof accountKindSchema>

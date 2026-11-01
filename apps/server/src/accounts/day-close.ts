@@ -15,6 +15,7 @@ import {
   formatRupees,
   kathmanduDate,
   PAYMENT_METHODS,
+  type PaymentMethod,
   schoolProfileSchema,
   toPaisaNumber,
 } from '@mikey/shared'
@@ -62,7 +63,16 @@ interface CloseInput extends RequestContext {
   body: DayCloseCreate
 }
 
-type DayTotals = Pick<DayCloseSnapshot, 'feesByMethod' | 'incomeByCategory' | 'expensesByCategory' | 'voids'>
+type DayTotals = Pick<
+  DayCloseSnapshot,
+  'cashBook' | 'feesByMethod' | 'incomeByCategory' | 'expensesByCategory' | 'transfers' | 'voids'
+>
+
+interface DayVoids {
+  voids: DayTotals['voids']
+  // What the voids of receipts took back, by the method the receipt was paid with.
+  byMethod: Map<PaymentMethod, bigint>
+}
 
 function present<T>(values: readonly (T | null)[]): T[] {
   return values.filter((value) => value !== null)
@@ -83,7 +93,7 @@ async function categoryTotals(
 }
 
 // The voids whose reversing entries are dated this day, in the order they were made.
-async function voidsOn(tx: Db, day: Date): Promise<DayTotals['voids']> {
+async function voidsOn(tx: Db, day: Date): Promise<DayVoids> {
   const entries = await tx.accountEntry.findMany({
     where: { entryDate: day, voidId: { not: null } },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -94,10 +104,9 @@ async function voidsOn(tx: Db, day: Date): Promise<DayTotals['voids']> {
     where: { id: { in: voidIds } },
     select: { id: true, reason: true, paymentId: true, incomeId: true, expenseId: true, voidedById: true },
   })
-  const receipts = await tx.receipt.findMany({
-    where: { paymentId: { in: present(voids.map((row) => row.paymentId)) } },
-    select: { paymentId: true, receiptNo: true },
-  })
+  const paymentIds = present(voids.map((row) => row.paymentId))
+  const receipts = await tx.receipt.findMany({ where: { paymentId: { in: paymentIds } }, select: { paymentId: true, receiptNo: true } })
+  const payments = await tx.payment.findMany({ where: { id: { in: paymentIds } }, select: { id: true, method: true } })
   const incomes = await tx.income.findMany({
     where: { id: { in: present(voids.map((row) => row.incomeId)) } },
     select: { id: true, description: true },
@@ -114,7 +123,9 @@ async function voidsOn(tx: Db, day: Date): Promise<DayTotals['voids']> {
   const descriptionOf = new Map([...incomes, ...expenses].map((row) => [row.id, row.description]))
   const nameOf = new Map(people.map((row) => [row.id, row.fullName]))
   const accountNameOf = new Map(accounts.map((row) => [row.id, row.name]))
-  return entries.map((entry) => {
+  const methodOf = new Map(payments.map((row) => [row.id, row.method]))
+  const byMethod = new Map<PaymentMethod, bigint>()
+  const list = entries.map((entry) => {
     const voided = entry.voidId === null ? undefined : voidById.get(entry.voidId)
     if (voided === undefined) {
       throw new Error(`Account entry for void ${entry.voidId ?? ''} has no void.`)
@@ -122,6 +133,10 @@ async function voidsOn(tx: Db, day: Date): Promise<DayTotals['voids']> {
     let target: DayTotals['voids'][number]['target']
     if (voided.paymentId !== null) {
       target = { type: 'payment', receiptNo: receiptNoOf.get(voided.paymentId) ?? '' }
+      const method = methodOf.get(voided.paymentId)
+      if (method !== undefined) {
+        byMethod.set(method, (byMethod.get(method) ?? 0n) + entry.amountPaisa)
+      }
     } else if (voided.incomeId !== null) {
       target = { type: 'income', description: descriptionOf.get(voided.incomeId) ?? '' }
     } else if (voided.expenseId !== null) {
@@ -137,11 +152,49 @@ async function voidsOn(tx: Db, day: Date): Promise<DayTotals['voids']> {
       voidedBy: nameOf.get(voided.voidedById) ?? '',
     }
   })
+  return { voids: list, byMethod }
+}
+
+// Money moved between accounts that day, in the order it was moved.
+async function transfersOn(tx: Db, day: Date): Promise<DayTotals['transfers']> {
+  const transfers = await tx.transfer.findMany({
+    where: { transferDate: day },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: { fromAccountId: true, toAccountId: true, amountPaisa: true, note: true },
+  })
+  const accounts = await tx.account.findMany({
+    where: { id: { in: transfers.flatMap((transfer) => [transfer.fromAccountId, transfer.toAccountId]) } },
+    select: { id: true, name: true },
+  })
+  const nameOf = new Map(accounts.map((account) => [account.id, account.name]))
+  return transfers.map((transfer) => ({
+    fromAccount: nameOf.get(transfer.fromAccountId) ?? '',
+    toAccount: nameOf.get(transfer.toAccountId) ?? '',
+    amount: toPaisaNumber(transfer.amountPaisa),
+    note: transfer.note,
+  }))
+}
+
+// The cash account's day: brought forward, in, out, and carried forward.
+async function cashBookOn(tx: Db, cashId: string, date: AdDate): Promise<DayTotals['cashBook']> {
+  const opening = await balanceOf(tx, cashId, { before: date })
+  const flows = await tx.accountEntry.groupBy({
+    by: ['direction'],
+    where: { accountId: cashId, entryDate: toDbDate(date) },
+    _sum: { amountPaisa: true },
+  })
+  const flow = (direction: 'in' | 'out') => flows.find((row) => row.direction === direction)?._sum.amountPaisa ?? 0n
+  return {
+    opening: toPaisaNumber(opening),
+    moneyIn: toPaisaNumber(flow('in')),
+    moneyOut: toPaisaNumber(flow('out')),
+    closing: toPaisaNumber(opening + flow('in') - flow('out')),
+  }
 }
 
 // The day's money as the summary prints it. It runs inside the close, so it reads one table per
 // query, one query after another (CLAUDE.md).
-async function dayTotals(tx: Db, date: AdDate): Promise<DayTotals> {
+async function dayTotals(tx: Db, date: AdDate, cashId: string): Promise<DayTotals> {
   const day = toDbDate(date)
   const fees = await tx.payment.groupBy({
     by: ['method'],
@@ -157,13 +210,32 @@ async function dayTotals(tx: Db, date: AdDate): Promise<DayTotals> {
       : tx.expenseCategory.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
   const incomeByCategory = await categoryTotals(incomes, categoryNames('income'))
   const expensesByCategory = await categoryTotals(expenses, categoryNames('expense'))
+  const { voids, byMethod } = await voidsOn(tx, day)
   const feesByMethod = PAYMENT_METHODS.flatMap((method) => {
     const row = fees.find((item) => item.method === method)
-    return row === undefined
-      ? []
-      : [{ method, receiptCount: row._count._all, amount: toPaisaNumber(row._sum.amountPaisa ?? 0n) }]
+    const gross = row?._sum.amountPaisa ?? 0n
+    const voided = byMethod.get(method) ?? 0n
+    if (row === undefined && voided === 0n) {
+      return []
+    }
+    return [
+      {
+        method,
+        receiptCount: row?._count._all ?? 0,
+        gross: toPaisaNumber(gross),
+        voided: toPaisaNumber(voided),
+        net: toPaisaNumber(gross - voided),
+      },
+    ]
   })
-  return { feesByMethod, incomeByCategory, expensesByCategory, voids: await voidsOn(tx, day) }
+  return {
+    cashBook: await cashBookOn(tx, cashId, date),
+    feesByMethod,
+    incomeByCategory,
+    expensesByCategory,
+    transfers: await transfersOn(tx, day),
+    voids,
+  }
 }
 
 // Records today's drawer count against the cashbook. Closing a day does not lock it (Q14).
@@ -198,7 +270,7 @@ export async function closeDay(deps: AppDeps, input: CloseInput): Promise<DayClo
       expectedCash: toPaisaNumber(expected),
       difference: toPaisaNumber(counted - expected),
       note,
-      ...(await dayTotals(tx, today)),
+      ...(await dayTotals(tx, today, cash.id)),
     })
     const row = await tx.dayClose.create({
       data: {
