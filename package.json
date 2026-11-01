@@ -12,6 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
     "lint": "eslint .",
+    "api:doc": "pnpm --filter @mikey/server api:doc",
     "db:migrate": "pnpm --filter @mikey/db migrate",
     "db:seed": "pnpm --filter @mikey/db seed"
   },

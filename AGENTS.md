@@ -45,6 +45,7 @@ pnpm db:seed        # sample school data for development only
 pnpm test           # vitest, all packages
 pnpm typecheck
 pnpm lint
+pnpm api:doc        # regenerate docs/API.md from the contract and the server (a test fails while it is stale)
 pnpm build          # electron-builder Windows installer
 ```
 
