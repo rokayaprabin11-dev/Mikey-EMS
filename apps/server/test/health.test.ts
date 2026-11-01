@@ -99,7 +99,7 @@ describe('health check', () => {
   })
 
   it('says only that the database is down when Computer 1 cannot reach it', async () => {
-    const broken = startTestServer('postgresql://mikey:mikey@127.0.0.1:1/mikeyems')
+    const broken = startTestServer('postgresql://mikey:mikey@127.0.0.1:1/mikeyems_test_unreachable')
     try {
       const response = await broken.call({ method: 'GET', path: '/health', ip: '192.168.1.31' })
       expect(response.statusCode).toBe(200)

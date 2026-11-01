@@ -24,10 +24,16 @@ function withDatabase(url: string, database: string): string {
   return copy.toString()
 }
 
+// Tests only ever work in databases named mikeyems_test or mikeyems_test_<letters>, so they can
+// never reach the developer's mikeyems or the school's database.
 function checkTestDatabaseName(name: string): void {
   if (!/^mikeyems_test(_[a-z]+)?$/.test(name)) {
     throw new Error(`"${name}" is not a test database name.`)
   }
+}
+
+export function checkTestDatabaseUrl(url: string): void {
+  checkTestDatabaseName(new URL(url).pathname.slice(1))
 }
 
 // A test database is only ever reset by dropping and recreating it: posted rows are permanent,
@@ -67,3 +73,15 @@ export async function copyTestDatabase(templateUrl: string, name: `mikeyems_test
   }
   return withDatabase(templateUrl, name)
 }
+
+// Drops a test database on the same server as `url`, closing any connection still open to it.
+export async function dropTestDatabase(url: string, name: `mikeyems_test${string}`): Promise<void> {
+  checkTestDatabaseName(name)
+  const admin = createDb(withDatabase(url, 'postgres'))
+  try {
+    await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
+  } finally {
+    await admin.$disconnect()
+  }
+}
+

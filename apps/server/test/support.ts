@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { NetworkInterfaceInfo } from 'node:os'
 
 import { createDb, type PrismaClient, type Student, type User } from '@mikey/db'
+import { checkTestDatabaseUrl } from '@mikey/db/testing'
 import { API_PREFIX, bsMonthName, bsToAd, errorBodySchema, loginResponseSchema } from '@mikey/shared'
 import { hash } from '@node-rs/argon2'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
@@ -56,6 +57,7 @@ function testDatabaseUrl(): string {
 }
 
 export function startTestServer(databaseUrl = testDatabaseUrl()): TestServer {
+  checkTestDatabaseUrl(databaseUrl)
   const db = createDb(databaseUrl)
   let now = new Date('2026-10-31T04:15:00.000Z')
   const app: FastifyInstance = buildApp(
