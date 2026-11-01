@@ -5,3 +5,5 @@ release/
 .env
 packages/db/src/generated/
 docs/design/*.pdf
+# The PNG export of the Accountant canvas stays local; its JPEGs are in docs/design/accountant/.
+docs/design/Mikey EMS — Accountant-png/
