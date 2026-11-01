@@ -158,3 +158,14 @@ Row fields: user (or `system`), computer (1 or 2), action code, area, record typ
 - Cash and bank are the balances reply (with `belowZero`). "Close the day" shows the cashbook's expected cash for today and the most recent close.
 - The Accountant sees their own latest five receipts and their own waiting void requests; the Super Admin sees the latest five receipts from anyone, with their lines, and every waiting void request. **[test]** an Accountant asking for the Super Admin's dashboard gets 403.
 
+## 13. Reports
+
+- Four financial reports, each for a period: fee collection, dues, expenses and day closes (`reports.finance`). Each comes as data for the screen (`GET /reports`), an A4 PDF (`/reports/pdf`) and an Excel workbook (`/reports/xlsx`). The other reports in the design (daily, monthly and yearly collection, student history, income, cashbook, bankbook, financial summary) are not built.
+- Every report shows the school, the report's name, the period with BS dates first and AD beside, and "Generated <BS date> (<AD date>), <time>, by <name>".
+- **Fee collection**: every receipt and every void of a receipt whose cash or bank entry is dated in the period, in the order they were made. A void is its own line on the day it was made, so the totals (received, voided, net) equal the fee lines of the cashbook and bankbook for the same days. **[test]** both; a voided receipt adds its own line and the net drops by its amount.
+- **Dues**: one row per class (the class of each student's latest enrollment) for the dues billed in the period, with their fines: students billed, students still owing, billed, paid, outstanding as of the time generated, and the share collected.
+- **Expenses**: every expense and every void of an expense dated in the period, each void its own line; totals spent, voided and net.
+- **Day closes**: every close in the period with what the cashbook said, what was counted, short or over, and the note; totals short and over.
+- The PDF is A4 portrait. Amounts have lakh grouping (`1,25,000.00`) and every page says "Amounts in rupees." and "Page N of M"; later pages repeat the column headings.
+- In the workbook, amounts are numbers of rupees with a "Rs." format that groups lakhs and crores, AD dates are real dates and BS dates are text, and the totals, net line and share collected are formulas. **[test]** the amount cells are numeric.
+

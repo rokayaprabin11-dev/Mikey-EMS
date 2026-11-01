@@ -6,6 +6,7 @@ import { registerDashboardRoutes } from './dashboard/routes.ts'
 import type { AppDeps } from './deps.ts'
 import { AppError, fail } from './errors.ts'
 import { registerFeeRoutes } from './fees/routes.ts'
+import { registerReportRoutes } from './reports/routes.ts'
 import { registerStudentRoutes } from './students/routes.ts'
 import { registerConnectionRoutes } from './system/connections.ts'
 import { registerHealthRoute } from './system/health.ts'
@@ -43,5 +44,6 @@ export function buildApp(deps: AppDeps, options: { logger: boolean }): FastifyIn
   registerStudentRoutes(app, deps)
   registerFeeRoutes(app, deps)
   registerAccountRoutes(app, deps)
+  registerReportRoutes(app, deps)
   return app
 }

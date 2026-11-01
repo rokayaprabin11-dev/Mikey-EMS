@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { dayCloseCreateSchema, transferCreateSchema } from '../src/api/accounts.ts'
 import { loginRequestSchema } from '../src/api/auth.ts'
-import { bsMonthSchema, errorBodySchema } from '../src/api/common.ts'
+import { bsMonthSchema, errorBodySchema, fiscalYearSchema } from '../src/api/common.ts'
 import { endpoints } from '../src/api/contract.ts'
 import { collectPaymentRequestSchema, PAYMENT_METHODS, voidRequestCreateSchema } from '../src/api/fees.ts'
-import { reportQuerySchema } from '../src/api/reports.ts'
+import { REPORT_TYPES, reportQuerySchema } from '../src/api/reports.ts'
 import { connectionRequestCreateSchema, healthResponseSchema } from '../src/api/system.ts'
 import { PERMISSION_KEYS } from '../src/permissions.ts'
 
@@ -124,21 +124,26 @@ describe('BS month filters', () => {
 })
 
 describe('report filters', () => {
-  it('needs exactly one of session or fiscal year for the yearly collection', () => {
-    const base = { type: 'yearly_collection' }
-    expect(reportQuerySchema.safeParse({ ...base, session: '2083' }).success).toBe(true)
-    expect(reportQuerySchema.safeParse({ ...base, fiscalYear: '2083/84' }).success).toBe(true)
-    expect(reportQuerySchema.safeParse(base).success).toBe(false)
-    expect(reportQuerySchema.safeParse({ ...base, session: '2083', fiscalYear: '2083/84' }).success).toBe(false)
-  })
+  const period = { from: '2026-10-18', to: '2026-11-16' }
 
-  it('refuses a fiscal year whose two halves do not follow each other', () => {
-    expect(reportQuerySchema.safeParse({ type: 'yearly_collection', fiscalYear: '2083/85' }).success).toBe(false)
+  it('takes one of the four reports and a period', () => {
+    for (const type of REPORT_TYPES) {
+      expect(reportQuerySchema.safeParse({ type, ...period }).success, type).toBe(true)
+    }
+    expect(reportQuerySchema.safeParse({ type: 'yearly_collection', ...period }).success).toBe(false)
+    expect(reportQuerySchema.safeParse({ type: 'expenses', from: period.from }).success).toBe(false)
   })
 
   it('refuses a date range that ends before it starts', () => {
     expect(reportQuerySchema.safeParse({ type: 'expenses', from: '2026-10-18', to: '2026-11-16' }).success).toBe(true)
     expect(reportQuerySchema.safeParse({ type: 'expenses', from: '2026-11-16', to: '2026-10-18' }).success).toBe(false)
+  })
+})
+
+describe('fiscal years', () => {
+  it('refuses a fiscal year whose two halves do not follow each other', () => {
+    expect(fiscalYearSchema.safeParse('2083/84').success).toBe(true)
+    expect(fiscalYearSchema.safeParse('2083/85').success).toBe(false)
   })
 })
 

@@ -1,199 +1,105 @@
 import { z } from 'zod'
 
-import { accountRefSchema, bookEntrySchema } from './accounts.ts'
-import {
-  adDateSchema,
-  bsMonthSchema,
-  countSchema,
-  fiscalYearSchema,
-  idSchema,
-  paisaSchema,
-  positivePaisaSchema,
-  receiptNoSchema,
-  recordStatusSchema,
-  sessionNameSchema,
-  timestampSchema,
-} from './common.ts'
-import { paymentMethodSchema, receiptLineSchema } from './fees.ts'
+import { adDateSchema, countSchema, paisaSchema, positivePaisaSchema, receiptNoSchema, timestampSchema } from './common.ts'
+import { paymentMethodSchema, voidReasonSchema } from './fees.ts'
 
-const dateRange = {
-  from: adDateSchema,
-  to: adDateSchema,
-}
+export const REPORT_TYPES = ['fee_collection', 'dues', 'expenses', 'day_closes'] as const
 
-function rangeInOrder(range: { from: string; to: string }): boolean {
-  return range.from <= range.to
-}
+export const reportTypeSchema = z.enum(REPORT_TYPES)
 
-const rangeError = { error: 'The end date is before the start date.', path: ['to'] }
-
-export const reportQuerySchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('daily_collection'), date: adDateSchema }),
-  z.object({ type: z.literal('monthly_collection'), bsMonth: bsMonthSchema }),
-  z
-    .object({
-      type: z.literal('yearly_collection'),
-      session: sessionNameSchema.optional(),
-      fiscalYear: fiscalYearSchema.optional(),
-    })
-    .refine((query) => (query.session === undefined) !== (query.fiscalYear === undefined), {
-      error: 'Choose a session or a fiscal year.',
-    }),
-  z.object({
-    type: z.literal('outstanding_fees'),
-    asOf: adDateSchema,
-    session: sessionNameSchema,
-    classId: idSchema.optional(),
-    sectionId: idSchema.optional(),
-  }),
-  z.object({ type: z.literal('student_payment_history'), studentId: idSchema, session: sessionNameSchema.optional() }),
-  z.object({ type: z.literal('income'), ...dateRange }).refine(rangeInOrder, rangeError),
-  z.object({ type: z.literal('expenses'), ...dateRange }).refine(rangeInOrder, rangeError),
-  z.object({ type: z.literal('cashbook'), accountId: idSchema, ...dateRange }).refine(rangeInOrder, rangeError),
-  z.object({ type: z.literal('bankbook'), accountId: idSchema, ...dateRange }).refine(rangeInOrder, rangeError),
-  z.object({ type: z.literal('financial_summary'), ...dateRange }).refine(rangeInOrder, rangeError),
-])
+export const reportQuerySchema = z
+  .object({ type: reportTypeSchema, from: adDateSchema, to: adDateSchema })
+  .refine((query) => query.from <= query.to, { error: 'The end date is before the start date.', path: ['to'] })
 
 const reportHeaderSchema = z.object({
   schoolName: z.string(),
+  from: adDateSchema,
+  to: adDateSchema,
   generatedAt: timestampSchema,
   generatedBy: z.string(),
 })
 
-const collectionRowSchema = z.object({ receiptCount: countSchema, amount: paisaSchema })
-
-const moneyEntryRowSchema = z.object({
-  id: idSchema,
+// Each receipt and each void of a receipt in the period, on the day its cash or bank entry is
+// dated, in the order they were made. A void is its own line, so the totals match the cashbook.
+const feeCollectionRowSchema = z.object({
+  kind: z.enum(['receipt', 'void']),
   date: adDateSchema,
-  description: z.string(),
-  categoryName: z.string(),
+  at: timestampSchema,
+  receiptNo: receiptNoSchema,
+  studentName: z.string(),
+  className: z.string(),
+  sectionName: z.string(),
+  method: paymentMethodSchema,
   accountName: z.string(),
-  voucherNo: z.string().nullable(),
-  status: recordStatusSchema,
   amount: positivePaisaSchema,
+  // On a void line: why, and who voided it.
+  reason: voidReasonSchema.nullable(),
+  voidedBy: z.string().nullable(),
 })
 
-const categoryTotalSchema = z.object({ name: z.string(), amount: paisaSchema })
+// One row per class: the dues billed in the period (with their fines), and what is still owed on
+// them now.
+const duesRowSchema = z.object({
+  className: z.string(),
+  studentsBilled: countSchema,
+  studentsOwing: countSchema,
+  billed: paisaSchema,
+  paid: paisaSchema,
+  outstanding: paisaSchema,
+})
 
-const bookReportSchema = {
-  header: reportHeaderSchema,
-  account: accountRefSchema,
-  ...dateRange,
-  openingBalance: paisaSchema,
-  entries: z.array(bookEntrySchema),
-  totals: z.object({ moneyIn: paisaSchema, moneyOut: paisaSchema }),
-  closingBalance: paisaSchema,
-}
+// Each expense and each void of an expense in the period, like the fee collection lines.
+const expenseRowSchema = z.object({
+  kind: z.enum(['expense', 'void']),
+  date: adDateSchema,
+  at: timestampSchema,
+  categoryName: z.string(),
+  description: z.string(),
+  voucherNo: z.string().nullable(),
+  accountName: z.string(),
+  amount: positivePaisaSchema,
+  reason: voidReasonSchema.nullable(),
+  voidedBy: z.string().nullable(),
+})
+
+const dayCloseRowSchema = z.object({
+  date: adDateSchema,
+  closedAt: timestampSchema,
+  closedBy: z.string(),
+  expectedCash: paisaSchema,
+  countedCash: paisaSchema,
+  difference: z.int(),
+  note: z.string().nullable(),
+})
 
 export const reportSchema = z.discriminatedUnion('type', [
   z.object({
-    type: z.literal('daily_collection'),
+    type: z.literal('fee_collection'),
     header: reportHeaderSchema,
-    date: adDateSchema,
-    rows: z.array(
-      z.object({
-        paymentId: idSchema,
-        receiptNo: receiptNoSchema,
-        takenAt: timestampSchema,
-        takenBy: z.string(),
-        studentName: z.string(),
-        className: z.string(),
-        sectionName: z.string(),
-        method: paymentMethodSchema,
-        status: recordStatusSchema,
-        amount: positivePaisaSchema,
-      }),
-    ),
-    totalsByMethod: z.array(z.object({ method: paymentMethodSchema, receiptCount: countSchema, amount: paisaSchema })),
-    total: paisaSchema,
+    rows: z.array(feeCollectionRowSchema),
+    // Net is received less voided, and can be below zero when earlier receipts were voided.
+    totals: z.object({ received: paisaSchema, voided: paisaSchema, net: z.int() }),
   }),
   z.object({
-    type: z.literal('monthly_collection'),
+    type: z.literal('dues'),
     header: reportHeaderSchema,
-    bsMonth: bsMonthSchema,
-    rows: z.array(collectionRowSchema.extend({ date: adDateSchema })),
-    total: paisaSchema,
-  }),
-  z.object({
-    type: z.literal('yearly_collection'),
-    header: reportHeaderSchema,
-    session: sessionNameSchema.nullable(),
-    fiscalYear: fiscalYearSchema.nullable(),
-    rows: z.array(collectionRowSchema.extend({ bsMonth: bsMonthSchema })),
-    total: paisaSchema,
-  }),
-  z.object({
-    type: z.literal('outstanding_fees'),
-    header: reportHeaderSchema,
-    asOf: adDateSchema,
-    session: sessionNameSchema,
-    rows: z.array(
-      z.object({
-        classId: idSchema,
-        className: z.string(),
-        sectionId: idSchema.nullable(),
-        sectionName: z.string().nullable(),
-        students: countSchema,
-        studentsWithDues: countSchema,
-        billedSoFar: paisaSchema,
-        outstanding: paisaSchema,
-      }),
-    ),
-  }),
-  z.object({
-    type: z.literal('student_payment_history'),
-    header: reportHeaderSchema,
-    student: z.object({
-      id: idSchema,
-      code: z.string(),
-      fullName: z.string(),
-      className: z.string(),
-      sectionName: z.string(),
-      rollNo: z.int().positive(),
-    }),
-    rows: z.array(
-      z.object({
-        paymentId: idSchema,
-        paidDate: adDateSchema,
-        receiptNo: receiptNoSchema,
-        method: paymentMethodSchema,
-        status: recordStatusSchema,
-        amount: positivePaisaSchema,
-        lines: z.array(receiptLineSchema),
-      }),
-    ),
-    total: paisaSchema,
-  }),
-  z.object({
-    type: z.literal('income'),
-    header: reportHeaderSchema,
-    ...dateRange,
-    rows: z.array(moneyEntryRowSchema),
-    byCategory: z.array(categoryTotalSchema),
-    total: paisaSchema,
+    rows: z.array(duesRowSchema),
+    totals: duesRowSchema.omit({ className: true }),
   }),
   z.object({
     type: z.literal('expenses'),
     header: reportHeaderSchema,
-    ...dateRange,
-    rows: z.array(moneyEntryRowSchema),
-    byCategory: z.array(categoryTotalSchema),
-    total: paisaSchema,
+    rows: z.array(expenseRowSchema),
+    totals: z.object({ spent: paisaSchema, voided: paisaSchema, net: z.int() }),
   }),
-  z.object({ type: z.literal('cashbook'), ...bookReportSchema }),
-  z.object({ type: z.literal('bankbook'), ...bookReportSchema }),
   z.object({
-    type: z.literal('financial_summary'),
+    type: z.literal('day_closes'),
     header: reportHeaderSchema,
-    ...dateRange,
-    income: z.array(categoryTotalSchema),
-    expenses: z.array(categoryTotalSchema),
-    totalIncome: paisaSchema,
-    totalExpenses: paisaSchema,
-    net: z.int(),
+    rows: z.array(dayCloseRowSchema),
+    totals: z.object({ short: paisaSchema, over: paisaSchema }),
   }),
 ])
 
 export type ReportQuery = z.infer<typeof reportQuerySchema>
-export type ReportType = ReportQuery['type']
+export type ReportType = z.infer<typeof reportTypeSchema>
 export type Report = z.infer<typeof reportSchema>

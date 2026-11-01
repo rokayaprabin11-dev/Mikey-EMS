@@ -128,7 +128,7 @@ Build the **CSV/Excel import adapter first**. Add a network adapter (for example
 
 - Receipts and report PDFs are generated on the server with PDFKit from the same data the screen shows, and returned as bytes. The desktop previews and prints them through the preload bridge.
 - A receipt PDF is drawn only from the receipt's snapshot (DOMAIN_RULES.md §5), at the sizes of the A5 receipt in the Accountant design. The day-close summary is drawn the same way from the close's snapshot (§7), on the same A5 page (`pdf/a5.ts`). PDFs embed the desktop's fonts (IBM Plex Sans, Anek Latin) from the `@fontsource` WOFF files; fontkit cannot subset some glyphs from the WOFF2 files. Printed words live in `packages/shared/src/i18n/print.en.ts`.
-- Excel exports use ExcelJS on the server.
+- Excel exports use ExcelJS on the server. A report's PDF and its workbook are drawn from one table (`reports/table.ts`), so they always show the same lines and totals.
 - Copies are stamped "Copy of original, print #N"; the server gives each print the next number. Any print after a void carries a large "VOID".
 
 ## Local development
