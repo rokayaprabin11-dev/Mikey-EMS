@@ -4,11 +4,26 @@ import { app, BrowserWindow, type WebContents } from 'electron'
 
 import type { StartAt } from '../bridge.ts'
 import { registerBridge } from './ipc.ts'
-import { settingsStore } from './settings.ts'
+import { type SettingsStore, settingsStore } from './settings.ts'
 
 // The same colours as the chrome-accountant and paper tokens, so a window never flashes white.
 const SPLASH_BACKGROUND = '#0F3A31'
 const APP_BACKGROUND = '#F2F4F3'
+
+// In development (`pnpm dev`) one machine is both computers. With no address saved, the app uses
+// this machine's own server, which always allows itself, so setup is skipped. A production build
+// has no such address, so the installed app always asks.
+const DEV_SERVER_URL = import.meta.env.DEV ? 'http://127.0.0.1:3100' : null
+
+function withDevServer(store: SettingsStore, serverUrl: string): SettingsStore {
+  return {
+    ...store,
+    read: async () => {
+      const settings = await store.read()
+      return { ...settings, serverUrl: settings.serverUrl ?? serverUrl }
+    },
+  }
+}
 
 let splash: BrowserWindow | null = null
 let appWindow: BrowserWindow | null = null
@@ -76,7 +91,8 @@ function finishStartup(startAt: StartAt, from: WebContents): void {
 }
 
 void app.whenReady().then(() => {
-  registerBridge(settingsStore(app.getPath('userData')), finishStartup)
+  const settings = settingsStore(app.getPath('userData'))
+  registerBridge(DEV_SERVER_URL === null ? settings : withDevServer(settings, DEV_SERVER_URL), finishStartup)
   openSplash()
 })
 
