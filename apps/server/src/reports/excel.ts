@@ -21,6 +21,8 @@ const AD_DATE_FORMAT = 'd mmm yyyy'
 const SHARE_FORMAT = '0%'
 
 const HEADER_ROW = 7
+// Excel's paper size number for A4.
+const A4_PAPER = 9
 
 // The spreadsheet keeps amounts as numbers of rupees, as Excel needs them to add up. Paisa are
 // whole numbers, so dividing by 100 gives exactly the rupees and paisa shown.
@@ -57,6 +59,7 @@ function setCell(cell: ExcelJS.Cell, table: ReportTable, row: readonly Value[], 
     case 'adDate':
       cell.value = toDbDate(String(value))
       cell.numFmt = AD_DATE_FORMAT
+      cell.alignment = { horizontal: 'left' }
       return
     case 'amount':
       cell.value = rupees(Number(value))
@@ -64,6 +67,10 @@ function setCell(cell: ExcelJS.Cell, table: ReportTable, row: readonly Value[], 
       return
     default:
       cell.value = value
+      // The column that takes what is left on the PDF wraps here too.
+      if (column.width === 0) {
+        cell.alignment = { wrapText: true, vertical: 'top' }
+      }
   }
 }
 
@@ -74,7 +81,11 @@ export async function renderReportExcel(report: Report): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = header.schoolName
   workbook.created = generated
-  const sheet = workbook.addWorksheet(table.title, { views: [{ state: 'frozen', ySplit: HEADER_ROW }] })
+  // Printed from the spreadsheet, a report fits one A4 page across.
+  const sheet = workbook.addWorksheet(table.title, {
+    views: [{ state: 'frozen', ySplit: HEADER_ROW }],
+    pageSetup: { paperSize: A4_PAPER, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  })
   sheet.columns = table.columns.map((column) => ({ width: column.excelWidth }))
 
   sheet.getCell('A1').value = header.schoolName

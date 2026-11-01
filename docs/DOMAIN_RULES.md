@@ -170,5 +170,5 @@ Row fields: user (or `system`), computer (1 or 2), action code, area, record typ
 - **Expenses**: every expense and every void of an expense dated in the period, each void its own line; totals spent, voided and net.
 - **Day closes**: every close in the period with what the cashbook said, what was counted, short or over, and the note; totals short and over.
 - The PDF is A4 portrait. Amounts have lakh grouping (`1,25,000.00`) and every page says "Amounts in rupees." and "Page N of M"; later pages repeat the column headings.
-- In the workbook, amounts are numbers of rupees with a "Rs." format that groups lakhs and crores, AD dates are real dates and BS dates are text, and the totals, net line and share collected are formulas. **[test]** the amount cells are numeric.
+- In the workbook, amounts are numbers of rupees with a "Rs." format that groups lakhs and crores, AD dates are real dates and BS dates are text, and the totals, net line and share collected are formulas. Printed from the spreadsheet, it fits one A4 page across (landscape). **[test]** the amount cells are numeric.
 
