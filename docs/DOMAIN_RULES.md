@@ -176,3 +176,10 @@ Row fields: user (or `system`), computer (1 or 2), action code, area, record typ
 - The PDF is A4 portrait. Amounts have lakh grouping (`1,25,000.00`) and every page says "Amounts in rupees." and "Page N of M"; later pages repeat the column headings.
 - In the workbook, amounts are numbers of rupees with a "Rs." format that groups lakhs and crores, AD dates are real dates and BS dates are text, and the totals, net line and share collected are formulas. Printed from the spreadsheet, it fits one A4 page across (landscape). **[test]** the amount cells are numeric.
 
+## 14. Passwords and the recovery key
+
+- The Super Admin's **recovery key** is a one-time code made when the Super Admin account is created (Computer 1 setup, step 3). It is shown once, for the Super Admin to write down and keep in the principal's office (the setup screen can also print it), and is stored only as a hash.
+- It resets a forgotten Super Admin password from Computer 1's sign-in screen ("Forgot the password?"). Using it is audited, forces a new password, and then shows a new key once; the old key stops working.
+- Only the Super Admin can reset the Accountant's password.
+- The recovery-key endpoints come with the Computer 1 build (Phase 6d, DECISIONS.md D26).
+
