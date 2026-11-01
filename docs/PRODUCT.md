@@ -34,7 +34,10 @@ Hidden areas must not appear in the Accountant's menu **and** the server must re
 4. **Fees** — fee heads, class-wise structure, per-student assignment, due dates, discounts, scholarships, fines, dues tracking, collection (full, partial, several heads at once), receipts (preview, print, PDF), payment history, void with approval.
 5. **Accounting (core only)** — income, expenses, categories, cash and bank accounts, cashbook, bankbook, income and expenditure summary, day close with cash count.
 6. **Biometric attendance** — device settings, connection test, scan sync or file import, ID mapping and unmatched-ID inbox, raw events, computed statuses, corrections with reason, attendance rules.
-7. **Reports** — fee (daily, monthly, yearly, outstanding, student history), accounts (income, expense, cashbook, bankbook, summary), attendance (daily, monthly, class, student, staff, late, absent). Every report shows school name, period and generated date/time and user. Export PDF and Excel, print.
+7. **Reports** — every report shows school name, period and generated date/time and user. Export PDF and Excel, print.
+   - Financial, version 1: fee collection, dues, expenses and day-close summary, each for a period (DOMAIN_RULES §13). The cashbook and bankbook print (the Cash & bank "Print" button: A4, from the same entries as the screen) comes at the start of Phase 6.
+   - Financial, later: yearly collection by month, student payment history, income, financial summary.
+   - Attendance: daily, monthly, class, student, staff, late, absent.
 8. **Users and permissions** — create, edit, deactivate, reset password, role, permission matrix, last sign-in.
 9. **Backup and recovery** — scheduled and manual local backups, encrypted cloud copy when internet exists, history, restore with safeguards.
 10. **Audit log** — read-only, filterable, before/after values for changes.
