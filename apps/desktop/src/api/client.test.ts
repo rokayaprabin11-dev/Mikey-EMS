@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { errorMessage } from '@mikey/shared'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { ServerReply, ServerRequest } from '../../electron/bridge.ts'
 import { ApiError, createApiClient, ReplyNotUnderstoodError, UnreachableError } from './client.ts'
@@ -144,5 +145,79 @@ describe('the API client', () => {
     expect(await client.call('testReceipt')).toEqual(pdf)
     await expect(client.call('testReceipt')).rejects.toBeInstanceOf(ReplyNotUnderstoodError)
     expect(await client.call('logout')).toBeUndefined()
+  })
+})
+
+describe('the session in the API client', () => {
+  const SESSION_ENDED = {
+    error: { code: 'SESSION_EXPIRED', message: errorMessage('SESSION_EXPIRED', { idleMinutes: 15 }), details: {} },
+  }
+
+  // A client on a clock the test moves, and a Computer 1 that answers from `replies` in turn.
+  function signedInClient(...replies: (ServerReply | Promise<ServerReply>)[]) {
+    let now = 1_000
+    const sent: ServerRequest[] = []
+    const client = createApiClient(
+      {
+        request: (request) => {
+          sent.push(request)
+          return Promise.resolve(replies.shift() ?? reply(500, {}))
+        },
+        testServer: () => Promise.reject(new Error('Not used.')),
+      },
+      () => now,
+    )
+    return {
+      client,
+      sent,
+      later: (ms: number) => {
+        now += ms
+      },
+    }
+  }
+
+  it('remembers when Computer 1 last saw the session: sign-in and signed-in requests, not /health', async () => {
+    const { client, later } = signedInClient(reply(200, { classes: [] }), reply(200, HEALTH))
+    expect(client.sessionUsedAt()).toBeNull()
+    client.setToken('session-token')
+    expect(client.sessionUsedAt()).toBe(1_000)
+    later(30_000)
+    await client.call('classes')
+    expect(client.sessionUsedAt()).toBe(31_000)
+    later(30_000)
+    await client.call('health')
+    expect(client.sessionUsedAt()).toBe(31_000)
+    client.setToken(null)
+    expect(client.sessionUsedAt()).toBeNull()
+  })
+
+  it('forgets the token and says so once when Computer 1 answers that the session has ended', async () => {
+    const { client, sent } = signedInClient(reply(401, SESSION_ENDED), reply(401, { error: { code: 'NOT_SIGNED_IN', message: 'Sign in to continue.', details: {} } }))
+    const ended = vi.fn()
+    client.onSessionEnded(ended)
+    client.setToken('session-token')
+    const error = await client.call('classes').catch((caught: unknown) => caught)
+    expect(error).toMatchObject({ code: 'SESSION_EXPIRED', status: 401 })
+    expect(ended).toHaveBeenCalledOnce()
+    expect(ended.mock.calls[0]?.[0]).toBe(error)
+    expect(client.sessionUsedAt()).toBeNull()
+
+    // No token any more: the next answer is about no session, not an ended one.
+    await expect(client.call('classes')).rejects.toMatchObject({ code: 'NOT_SIGNED_IN' })
+    expect(sent.map((request) => request.token)).toEqual(['session-token', null])
+    expect(ended).toHaveBeenCalledOnce()
+  })
+
+  it('ignores an answer about a session that was replaced while the request was out', async () => {
+    let answer: (value: ServerReply) => void = () => undefined
+    const { client } = signedInClient(new Promise<ServerReply>((resolve) => (answer = resolve)))
+    const ended = vi.fn()
+    client.onSessionEnded(ended)
+    client.setToken('old-token')
+    const pending = client.call('classes').catch((caught: unknown) => caught)
+    client.setToken('new-token')
+    answer(reply(401, SESSION_ENDED))
+    expect(await pending).toMatchObject({ code: 'SESSION_EXPIRED' })
+    expect(ended).not.toHaveBeenCalled()
   })
 })

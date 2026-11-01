@@ -154,9 +154,12 @@ function answer(name: EndpointName, reply: ServerReply): unknown {
   return readReply(name, endpoints[name].response, reply)
 }
 
-export function createApiClient(transport: Pick<Bridge, 'request' | 'testServer'>) {
+export function createApiClient(transport: Pick<Bridge, 'request' | 'testServer'>, clock = (): number => Date.now()) {
   // Kept in memory only, so the app asks for sign-in again after a restart (ARCHITECTURE.md).
   let token: string | null = null
+  // When Computer 1 last saw the session. Every signed-in request starts its idle time again.
+  let sessionUsedAt: number | null = null
+  let onSessionEnded: ((error: ApiError) => void) | null = null
 
   async function call<N extends EndpointName>(name: N, ...args: CallArgs<N>): Promise<CallOutput<N>> {
     const endpoint: Endpoint = endpoints[name]
@@ -166,13 +169,26 @@ export function createApiClient(transport: Pick<Bridge, 'request' | 'testServer'
     check(name, 'query', endpoint.query, input.query)
     check(name, 'body', endpoint.body, input.body)
 
+    const sent = WITHOUT_SESSION.has(endpoint.access) ? null : token
     const reply = await transport.request({
       method: endpoint.method,
       path: pathOf(name, endpoint, input),
-      token: WITHOUT_SESSION.has(endpoint.access) ? null : token,
+      token: sent,
       body: input.body === undefined ? null : JSON.stringify(input.body),
       timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     })
+    // GET /school answers with or without a session, so it says nothing about one. A reply to a
+    // token that was replaced in the meantime (signed out, signed in again) is about an old one.
+    if (reply.reached && sent !== null && sent === token && endpoint.access !== 'optional_sign_in') {
+      const error = reply.status === 401 ? errorOf(reply) : null
+      if (error instanceof ApiError) {
+        token = null
+        sessionUsedAt = null
+        onSessionEnded?.(error)
+        throw error
+      }
+      sessionUsedAt = clock()
+    }
     return answer(name, reply) as CallOutput<N>
   }
 
@@ -182,8 +198,18 @@ export function createApiClient(transport: Pick<Bridge, 'request' | 'testServer'
     async testServer(serverUrl: string): Promise<CallOutput<'health'>> {
       return answer('health', await transport.testServer(serverUrl)) as CallOutput<'health'>
     },
+    // The token from sign-in starts a session; null ends it.
     setToken(value: string | null): void {
       token = value
+      sessionUsedAt = value === null ? null : clock()
+    },
+    sessionUsedAt(): number | null {
+      return sessionUsedAt
+    },
+    // Told when Computer 1 answers a signed-in request with 401: the session ended (idle, 12
+    // hours, or the account was switched off) and the token is already forgotten.
+    onSessionEnded(listener: ((error: ApiError) => void) | null): void {
+      onSessionEnded = listener
     },
   }
 }

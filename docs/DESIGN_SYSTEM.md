@@ -90,7 +90,7 @@ Bundle both fonts locally with `@fontsource`. No internet font loading. In Tailw
 
 ## Components (shadcn/ui base)
 
-The components live in `apps/desktop/src/components/ui` (DECISIONS D27). Add one from `apps/desktop` with `pnpm dlx shadcn@4.23.0 add <name>`, then give it the variants below and the token names, and keep its `data-slot` names.
+The components live in `apps/desktop/src/components/ui` (DECISIONS D27). Add one from `apps/desktop` with `pnpm dlx shadcn@4.23.0 add <name>`, answering "no" when it offers to overwrite a component we already changed. Then give it the variants below and the token names, change its `@/` imports to relative ones, drop the animation classes (shadcn's animation package is not installed) and the parts no screen uses, and keep its `data-slot` names.
 
 | Need | Component | Notes |
 | --- | --- | --- |
@@ -103,7 +103,7 @@ The components live in `apps/desktop/src/components/ui` (DECISIONS D27). Add one
 | Segmented control | `ToggleGroup` | Selected = `ink` background, white text |
 | Tabs | `Tabs` | Underline style, selected = `ink` 2px underline |
 | Banners | `Alert` | Icon + bold sentence saying what happened + plain sentence saying what to do + one action button. Variants `ok`, `warn`, `bad`: the status tint behind the status colour, with the plain sentence in `ink-soft`. A `bad` banner is announced at once (`role="alert"`), the others politely (`role="status"`) |
-| Dialogs | `Dialog` / `AlertDialog` | Confirm money actions and restore. Restore requires typing `RESTORE` |
+| Dialogs | `Dialog` / `AlertDialog` | Confirm money actions and restore. Restore requires typing `RESTORE`. A white card with a `line-strong` border over the page darkened with `ink`; the title in Anek Latin 19px, the buttons side by side (the main action wider) |
 | Charts | Recharts | Bars only (no pies). Current period in `action`, others in a muted tint. Always add a text summary |
 
 ## Screen patterns

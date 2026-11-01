@@ -1,3 +1,4 @@
+import { errorMessage } from '@mikey/shared'
 import { type Mock, vi } from 'vitest'
 
 import type { Bridge, Printer, ReceiptPrinter, ServerReply, ServerRequest, StartAt } from '../../electron/bridge.ts'
@@ -77,4 +78,54 @@ export function fakeBridge(options: {
   }
   window.mikey = bridge
   return bridge
+}
+
+export const TOKEN = 'session-token-1'
+export const PASSWORD = 'mikey-dev-2083'
+export const BIKASH = {
+  id: '6f3c2a10-4b7e-4d3a-9c51-2e8b7a9d0c41',
+  username: 'bikash.acc',
+  fullName: 'Bikash Thapa',
+  role: 'accountant',
+  permissions: [],
+}
+
+function failure(status: number, code: string, message: string): ServerReply {
+  return json(status, { error: { code, message, details: {} } })
+}
+
+// A Computer 1 that signs bikash.acc in and keeps the session until `ended` or `reachable` says
+// otherwise. Its clock reads `time`.
+export function computer1WithSignIn(time = '2026-10-29T04:19:00.000Z') {
+  const state = { ended: false, reachable: true, wrongPasswordMessage: errorMessage('WRONG_USERNAME_OR_PASSWORD') }
+  const answer = (request: ServerRequest): ServerReply => {
+    if (!state.reachable) {
+      return NO_REPLY
+    }
+    const route = `${request.method} ${request.path}`
+    if (route === 'GET /health') {
+      return health({ time })
+    }
+    if (route === 'POST /auth/login') {
+      const body = JSON.parse(request.body ?? '{}') as { username: string; password: string }
+      return body.username === BIKASH.username && body.password === PASSWORD
+        ? json(200, { token: TOKEN, user: BIKASH, idleTimeoutMinutes: 15 })
+        : failure(401, 'WRONG_USERNAME_OR_PASSWORD', state.wrongPasswordMessage)
+    }
+    if (request.token !== TOKEN) {
+      return failure(401, 'NOT_SIGNED_IN', errorMessage('NOT_SIGNED_IN'))
+    }
+    if (state.ended) {
+      return failure(401, 'SESSION_EXPIRED', errorMessage('SESSION_EXPIRED', { idleMinutes: 15 }))
+    }
+    if (route === 'GET /auth/session') {
+      return json(200, { user: BIKASH, idleTimeoutMinutes: 15 })
+    }
+    if (route === 'POST /auth/logout') {
+      state.ended = true
+      return { reached: true, status: 204, contentType: '', body: new Uint8Array() }
+    }
+    throw new Error(`Not expected: ${route}`)
+  }
+  return { answer, state }
 }

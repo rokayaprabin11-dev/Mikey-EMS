@@ -6,6 +6,8 @@ export const en = {
   crest: 'School crest',
   copyDetails: 'Copy error details',
   copied: 'Copied',
+  weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+  roles: { super_admin: 'Super Admin', accountant: 'Accountant' },
   // Shown when something fails that the app does not know how to handle.
   crash: {
     title: 'Something went wrong in this app.',
@@ -113,6 +115,34 @@ export const en = {
     },
   },
   signIn: {
-    notBuilt: 'Sign-in is not built yet. It comes in the next step of this build.',
+    counter: 'Accounts counter',
+    intro:
+      'This is Computer 2. It works with the school records kept on Computer 1 in the office. Fees, receipts, income and expenses are saved there the moment you confirm.',
+    checking: 'Looking for Computer 1…',
+    found: 'Computer 1 found on the office network',
+    answered: (address: string, ms: number) => `Server ${address}, answered in ${ms} ms`,
+    today: (weekday: string, date: string) => `${weekday}, ${date}`,
+    title: 'Sign in',
+    username: 'Username',
+    password: 'Password',
+    submit: 'Sign in',
+    signingIn: 'Signing in…',
+    typeUsername: 'Type your username.',
+    typePassword: 'Type your password.',
+    forgot: 'Forgot your password? Ask the Super Admin on Computer 1 to reset it.',
+    changeServer: 'Change server address',
+  },
+  // Until the app frame is built (Phase 5f), signing in shows this.
+  signedIn: {
+    title: (name: string) => `Signed in as ${name}`,
+    role: (role: string) => `${role} on Computer 2`,
+    next: 'The sidebar, the top bar and the screens come next. For now you can sign out, or wait to see the warning before an idle sign-out.',
+    signOut: 'Sign out',
+  },
+  idle: {
+    title: (countdown: string) => `Signing you out in ${countdown}`,
+    text: (minutes: number) => `No activity for ${minutes} minutes. Anything already saved is safe.`,
+    signOut: 'Sign out',
+    stay: 'Stay signed in',
   },
 } as const
