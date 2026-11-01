@@ -7,7 +7,6 @@ import {
   formatBsDate,
   kathmanduDate,
   PAYMENT_METHODS,
-  receiptSnapshotSchema,
   type SchoolDashboard,
   toPaisaNumber,
 } from '@mikey/shared'
@@ -266,9 +265,6 @@ export async function schoolDashboard(db: Db, now: Date): Promise<SchoolDashboar
     incomeThisMonth: sumOf(income._sum.amountPaisa),
     expensesThisMonth: sumOf(expenses._sum.amountPaisa),
     collectionByMonth: await collectionByMonth(db, today),
-    latestReceipts: latest.map((row) => ({
-      ...toPaymentListItem(row),
-      lines: receiptSnapshotSchema.parse(row.receipt?.snapshot).lines,
-    })),
+    latestReceipts: latest.map(toPaymentListItem),
   }
 }

@@ -137,7 +137,7 @@ describe('the payments list', () => {
       await day.db.student.update({ where: { id: posted.student.id }, data: { fullName: 'Renamed Later' } })
 
       const list = async (filters: string) => {
-        const response = await get(adminOnDay, `/payments?date=2026-11-03${filters}`)
+        const response = await get(adminOnDay, `/payments?from=2026-11-03${filters}`)
         expect(response.statusCode, response.body).toBe(200)
         return paymentsListResponseSchema.parse(response.json())
       }
@@ -148,11 +148,13 @@ describe('the payments list', () => {
         [posted.receipt.snapshot.receiptNo, 'posted'],
       ])
       expect(all.total).toBe(2 * 355_000)
+      expect(all.byMethod).toEqual([{ method: 'cash', receiptCount: 2, amount: 2 * 355_000 }])
       expect(all.payments[2]).toMatchObject({
         student: { id: posted.student.id, fullName: 'Bibek Lama', className: 'Class 7', sectionName: 'A' },
         takenBy: 'Test Accountant',
         method: 'cash',
         amount: 355_000,
+        lines: posted.receipt.snapshot.lines,
       })
 
       expect((await list('&status=voided')).payments.map((payment) => payment.paymentId)).toEqual([voided.paymentId])
@@ -162,6 +164,11 @@ describe('the payments list', () => {
       expect((await list(`&search=${encodeURIComponent(posted.receipt.snapshot.receiptNo)}`)).payments).toHaveLength(1)
       expect((await list('&search=renamed')).payments.map((payment) => payment.paymentId)).toEqual([posted.paymentId])
       expect((await list('&takenBy=me')).payments).toEqual([])
+
+      // Several days at once: the day before has none of these receipts, the day after starts empty.
+      expect((await list('&to=2026-11-04')).payments).toHaveLength(3)
+      expect((await get(adminOnDay, '/payments?from=2026-11-02&to=2026-11-02')).json()).toMatchObject({ payments: [], total: 0, byMethod: [] })
+      expect(errorOf(await get(adminOnDay, '/payments?from=2026-11-04&to=2026-11-03'))).toMatchObject({ status: 400, code: 'VALIDATION_FAILED' })
     } finally {
       await day.close()
     }
@@ -254,7 +261,7 @@ describe('one more original', () => {
 
     // Each permission is its own, with its own reason and audit row, and the list counts them.
     expect((await allow(asAdmin(), { reason: 'Jammed again on the second original.' })).statusCode).toBe(204)
-    const listed = paymentsListResponseSchema.parse((await get(asAdmin(), '/payments?date=2026-10-31')).json())
+    const listed = paymentsListResponseSchema.parse((await get(asAdmin(), '/payments?from=2026-10-31')).json())
     expect(listed.payments.find((payment) => payment.paymentId === paymentId)).toMatchObject({ extraOriginalsAllowed: 2 })
     expect(await server.db.auditLog.count({ where: { action: 'receipts.original_allowed', recordId: allowance.receiptId } })).toBe(2)
   })

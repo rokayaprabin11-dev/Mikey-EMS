@@ -143,13 +143,20 @@ export const collectPaymentResponseSchema = z.object({
 })
 
 // `search` matches the receipt number, or the student's name or ID.
-export const paymentsListQuerySchema = z.object({
-  date: adDateSchema,
-  takenBy: z.enum(['me', 'everyone']).default('everyone'),
-  search: z.string().trim().max(100).optional(),
-  method: paymentMethodSchema.optional(),
-  status: recordStatusSchema.optional(),
-})
+// One day's receipts, or several days' with `to`.
+export const paymentsListQuerySchema = z
+  .object({
+    from: adDateSchema,
+    to: adDateSchema.optional(),
+    takenBy: z.enum(['me', 'everyone']).default('everyone'),
+    search: z.string().trim().max(100).optional(),
+    method: paymentMethodSchema.optional(),
+    status: recordStatusSchema.optional(),
+  })
+  .refine((query) => query.to === undefined || query.from <= query.to, {
+    error: 'The end date is before the start date.',
+    path: ['to'],
+  })
 
 export const paymentListItemSchema = z.object({
   paymentId: idSchema,
@@ -160,14 +167,17 @@ export const paymentListItemSchema = z.object({
   method: paymentMethodSchema,
   status: recordStatusSchema,
   amount: positivePaisaSchema,
+  // What it paid for, as the receipt printed it.
+  lines: z.array(receiptLineSchema),
   // How many times the Super Admin allowed one more original of this receipt.
   extraOriginalsAllowed: countSchema,
 })
 
-// `total` leaves out voided receipts.
+// `total` and `byMethod` add up the listed receipts that still stand; voided ones are left out.
 export const paymentsListResponseSchema = z.object({
   payments: z.array(paymentListItemSchema),
   total: paisaSchema,
+  byMethod: z.array(z.object({ method: paymentMethodSchema, receiptCount: countSchema, amount: paisaSchema })),
 })
 
 export const VOID_REASONS = ['wrong_student', 'wrong_amount', 'wrong_method', 'other'] as const

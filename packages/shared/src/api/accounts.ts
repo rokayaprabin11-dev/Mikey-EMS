@@ -99,7 +99,7 @@ export const transferSchema = z.object({
   createdAt: timestampSchema,
 })
 
-// What a void reverses, as the cashbook and the day-close summary name it.
+// What a void reverses, as the day-close summary names it.
 const voidTargetTextSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('payment'), receiptNo: receiptNoSchema }),
   z.object({ type: z.literal('income'), description: z.string() }),
@@ -133,7 +133,12 @@ const bookEntrySourceSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('void'),
     voidId: idSchema,
-    target: voidTargetTextSchema,
+    // An income or expense void also names the category of what it reverses, for the Category column.
+    target: z.discriminatedUnion('type', [
+      z.object({ type: z.literal('payment'), receiptNo: receiptNoSchema }),
+      z.object({ type: z.literal('income'), description: z.string(), categoryName: z.string() }),
+      z.object({ type: z.literal('expense'), description: z.string(), categoryName: z.string() }),
+    ]),
     reason: voidReasonSchema,
     approvedBy: z.string(),
   }),

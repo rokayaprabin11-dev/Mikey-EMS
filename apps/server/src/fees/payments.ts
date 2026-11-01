@@ -1,5 +1,6 @@
 import type { Prisma } from '@mikey/db'
 import {
+  PAYMENT_METHODS,
   type PaymentListItem,
   type PaymentsListQuery,
   type PaymentsListResponse,
@@ -62,16 +63,18 @@ export function toPaymentListItem(row: Prisma.PaymentGetPayload<{ select: typeof
     method: snapshot.method,
     status: recordStatus(row),
     amount: snapshot.totals.amountPaid,
+    lines: snapshot.lines,
     extraOriginalsAllowed: row.receipt._count.allowances,
   }
 }
 
-// One day's receipts, newest first, shown as they were printed (from each receipt's snapshot).
+// A day's receipts (or several days'), newest first, shown as they were printed (from each
+// receipt's snapshot).
 export async function listPayments(db: Db, query: PaymentsListQuery, session: SessionContext): Promise<PaymentsListResponse> {
   const search = query.search ?? ''
   const rows = await db.payment.findMany({
     where: {
-      paidDate: toDbDate(query.date),
+      paidDate: { gte: toDbDate(query.from), lte: toDbDate(query.to ?? query.from) },
       ...(query.takenBy === 'me' ? { takenById: session.user.id } : {}),
       ...(query.method === undefined ? {} : { method: query.method }),
       ...(query.status === undefined ? {} : statusFilter(query.status)),
@@ -81,6 +84,12 @@ export async function listPayments(db: Db, query: PaymentsListQuery, session: Se
     select: listedPayment,
   })
   const payments = rows.map(toPaymentListItem)
-  const total = payments.filter((payment) => payment.status !== 'voided').reduce((sum, payment) => sum + payment.amount, 0)
-  return { payments, total }
+  const standing = payments.filter((payment) => payment.status !== 'voided')
+  const byMethod = PAYMENT_METHODS.flatMap((method) => {
+    const paid = standing.filter((payment) => payment.method === method)
+    return paid.length === 0
+      ? []
+      : [{ method, receiptCount: paid.length, amount: paid.reduce((sum, payment) => sum + payment.amount, 0) }]
+  })
+  return { payments, total: standing.reduce((sum, payment) => sum + payment.amount, 0), byMethod }
 }

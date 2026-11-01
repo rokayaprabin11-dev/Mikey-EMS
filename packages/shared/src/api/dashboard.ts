@@ -11,7 +11,7 @@ import {
   studentRefSchema,
   timestampSchema,
 } from './common.ts'
-import { paymentListItemSchema, paymentMethodSchema, receiptLineSchema, voidRequestSchema } from './fees.ts'
+import { paymentListItemSchema, paymentMethodSchema, voidRequestSchema } from './fees.ts'
 
 // Money taken: the receipts that still stand (not voided), as the Payments list counts them.
 const collectionSchema = z.object({
@@ -80,7 +80,7 @@ export const schoolDashboardSchema = z.object({
   incomeThisMonth: paisaSchema,
   expensesThisMonth: paisaSchema,
   collectionByMonth: z.array(z.object({ bsMonth: bsMonthSchema, amount: paisaSchema })),
-  latestReceipts: z.array(paymentListItemSchema.extend({ lines: z.array(receiptLineSchema) })),
+  latestReceipts: z.array(paymentListItemSchema),
 })
 
 export type FinanceDashboard = z.infer<typeof financeDashboardSchema>

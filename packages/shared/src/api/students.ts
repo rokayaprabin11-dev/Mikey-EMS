@@ -41,6 +41,8 @@ export const studentFeesSchema = z.object({
   dues: z.array(dueItemSchema),
   paidThisSession: z.object({
     sessionName: sessionNameSchema,
+    // The session's first day, for "4 receipts since Baishakh".
+    since: adDateSchema,
     amount: paisaSchema,
     receiptCount: countSchema,
   }),

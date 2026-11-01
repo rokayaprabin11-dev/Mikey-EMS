@@ -212,7 +212,7 @@ describe('one student on the lookup screen', () => {
     const detail = studentFeesSchema.parse((await get(`/students/${student.id}/fees`)).json())
     expect(detail.student).toMatchObject({ fullName: 'Sonam Detailcheck', guardianRelationship: 'Father', outstanding: 355_000 })
     expect(detail.dues.map((item) => [item.kind, item.periodLabel, item.remaining])).toEqual([['fee', 'Kartik 2083', 355_000]])
-    expect(detail.paidThisSession).toEqual({ sessionName: '2083', amount: 355_000, receiptCount: 1 })
+    expect(detail.paidThisSession).toEqual({ sessionName: '2083', since: '2026-04-28', amount: 355_000, receiptCount: 1 })
     expect(detail.payments.map((payment) => [payment.receiptNo, payment.status, payment.amount])).toEqual([
       [partReceipt.snapshot.receiptNo, 'voided', 100_000],
       [receipt.snapshot.receiptNo, 'posted', 355_000],

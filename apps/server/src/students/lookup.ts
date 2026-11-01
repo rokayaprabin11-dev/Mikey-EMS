@@ -172,7 +172,7 @@ export async function studentFees(db: Db, studentId: string): Promise<StudentFee
     },
   })
 
-  const paidThisSession = { sessionName: session.name, amount: 0, receiptCount: 0 }
+  const paidThisSession = { sessionName: session.name, since: fromDbDate(session.startDate), amount: 0, receiptCount: 0 }
   const history = payments.map((payment) => {
     if (payment.receipt === null) {
       throw new Error(`Payment ${payment.id} has no receipt.`)

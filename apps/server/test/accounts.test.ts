@@ -652,6 +652,14 @@ describe('voiding income and expenses', () => {
       { accountId: school.cashId, direction: 'in', amountPaisa: 70_000n, entryDate: new Date('2026-10-31T00:00:00.000Z') },
     ])
     expect(await balance(asAccountant, school.cashId)).toBe(cash + 70_000)
+    // The cashbook's void line names the category of the expense it reverses.
+    const book = bookResponseSchema.parse((await get(asAccountant, `/accounts/${school.cashId}/book?date=2026-10-31`)).json())
+    expect(book.entries.map((item) => item.source)).toContainEqual(
+      expect.objectContaining({
+        type: 'void',
+        target: { type: 'expense', description: 'Whiteboard markers and chalk', categoryName: 'Stationery and teaching' },
+      }),
+    )
     const again = await post(asAccountant, '/void-requests', {
       target: { type: 'expense', id: expense.id },
       reason: 'other',

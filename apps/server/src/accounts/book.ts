@@ -29,8 +29,8 @@ const sources = {
       reason: true,
       voidedBy: { select: { fullName: true } },
       payment: { select: { receipt: { select: { receiptNo: true } } } },
-      income: { select: { description: true } },
-      expense: { select: { description: true } },
+      income: { select: { description: true, category: { select: { name: true } } } },
+      expense: { select: { description: true, category: { select: { name: true } } } },
     },
   },
 } satisfies Prisma.AccountEntryInclude
@@ -73,9 +73,9 @@ function sourceOf(row: EntryRow, accountId: string): BookEntry['source'] {
     if (receiptNo !== undefined) {
       target = { type: 'payment', receiptNo }
     } else if (voided.income !== null) {
-      target = { type: 'income', description: voided.income.description }
+      target = { type: 'income', description: voided.income.description, categoryName: voided.income.category.name }
     } else if (voided.expense !== null) {
-      target = { type: 'expense', description: voided.expense.description }
+      target = { type: 'expense', description: voided.expense.description, categoryName: voided.expense.category.name }
     } else {
       throw new Error(`Void ${voided.id} points at nothing.`)
     }
