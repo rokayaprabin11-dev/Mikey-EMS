@@ -27,15 +27,27 @@ export interface NetLine {
   negative: string
 }
 
-export interface ReportTable {
-  title: string
-  // Under the title: the period, for the dues when what is owed was worked out, and who made it when.
-  lines: readonly string[]
-  note: string
+export interface TableShape {
   columns: readonly Column[]
   rows: readonly Value[][]
   totals: boolean
   net: NetLine | null
+}
+
+// The main table's amount columns added up for each value of one of its columns (for example
+// spent and voided by category). Its first column names the group; the rest follow `sumColumns`.
+export interface GroupTable extends TableShape {
+  title: string
+  groupColumn: number
+  sumColumns: readonly number[]
+}
+
+export interface ReportTable extends TableShape {
+  title: string
+  // Under the title: the period, for the dues when what is owed was worked out, and who made it when.
+  lines: readonly string[]
+  note: string
+  groups: GroupTable | null
 }
 
 const dates = [
@@ -60,10 +72,11 @@ function headerLines(report: Report): string[] {
 }
 
 export function reportTable(report: Report): ReportTable {
-  return { ...tableOf(report), lines: headerLines(report) }
+  const { groups = null, ...table } = tableOf(report)
+  return { ...table, groups, lines: headerLines(report) }
 }
 
-function tableOf(report: Report): Omit<ReportTable, 'lines'> {
+function tableOf(report: Report): Omit<ReportTable, 'lines' | 'groups'> & { groups?: GroupTable } {
   const title = words.titles[report.type]
   switch (report.type) {
     case 'fee_collection':
@@ -139,6 +152,19 @@ function tableOf(report: Report): Omit<ReportTable, 'lines'> {
         }),
         totals: true,
         net: { columns: [5, 6], positive: words.netSpent, negative: words.netReturned },
+        groups: {
+          title: words.byCategory,
+          groupColumn: 2,
+          sumColumns: [5, 6],
+          columns: [
+            { header: words.category, kind: 'text', width: 0, excelWidth: 30 },
+            amount(words.spent, 140),
+            amount(words.voided, 140),
+          ],
+          rows: report.byCategory.map((category) => [category.name, category.spent, category.voided]),
+          totals: true,
+          net: { columns: [1, 2], positive: words.netSpent, negative: words.netReturned },
+        },
       }
     case 'day_closes':
       return {
@@ -170,6 +196,6 @@ function tableOf(report: Report): Omit<ReportTable, 'lines'> {
 }
 
 // The total of a summed column, worked out the same way the spreadsheet's SUM does.
-export function columnTotal(table: ReportTable, column: number): number {
+export function columnTotal(table: TableShape, column: number): number {
   return table.rows.reduce((total, row) => total + (typeof row[column] === 'number' ? row[column] : 0), 0)
 }

@@ -90,6 +90,8 @@ export const reportSchema = z.discriminatedUnion('type', [
     type: z.literal('expenses'),
     header: reportHeaderSchema,
     rows: z.array(expenseRowSchema),
+    // The same lines added up for each category, by name.
+    byCategory: z.array(z.object({ name: z.string(), spent: paisaSchema, voided: paisaSchema })),
     totals: z.object({ spent: paisaSchema, voided: paisaSchema, net: z.int() }),
   }),
   z.object({

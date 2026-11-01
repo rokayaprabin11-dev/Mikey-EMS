@@ -10,7 +10,7 @@ import {
 
 import type { FontName } from '../pdf/fonts.ts'
 import { INK, LINE_HEIGHT, PdfLayout, pt, renderPdf, RULE } from '../pdf/layout.ts'
-import { columnTotal, type ReportTable, reportTable, type Value } from './table.ts'
+import { columnTotal, type ReportTable, reportTable, type TableShape, type Value } from './table.ts'
 
 const words = printEn.reports
 
@@ -39,38 +39,56 @@ function share(part: Value, whole: Value): string {
 class ReportLayout extends PdfLayout {
   private readonly report: Report
   private readonly table: ReportTable
-  private readonly widths: number[]
+  // The table being drawn (the report's own, then any grouped one) and its column widths.
+  private current: TableShape
+  private widths: number[] = []
   private y = TOP
 
   constructor(doc: PDFKit.PDFDocument, report: Report) {
     super(doc)
     this.report = report
     this.table = reportTable(report)
-    const fixed = this.table.columns.reduce((sum, column) => sum + column.width, 0)
-    this.widths = this.table.columns.map((column) => (column.width === 0 ? WIDTH - fixed : column.width))
+    this.current = this.table
   }
 
   draw(): void {
     this.header()
-    if (this.table.rows.length === 0) {
-      this.y += GAP
-      this.line([{ text: words.none }], LEFT, this.y, 12.5)
-    } else {
-      this.tableHeader()
-      for (const row of this.table.rows) {
-        this.row(row, false)
-      }
-      if (this.table.totals) {
-        this.row(this.totalsRow(), true)
-      }
-      this.netLine()
+    this.drawTable(this.table)
+    const { groups } = this.table
+    if (groups !== null) {
+      this.makeRoom(2 * GAP + 16 * LINE_HEIGHT + 4 * ROW_PADDING + 2 * SIZE * LINE_HEIGHT)
+      this.y += 2 * GAP
+      this.use('display', 16)
+      this.doc.text(groups.title, pt(LEFT), pt(this.y), { lineBreak: false })
+      this.y += 16 * LINE_HEIGHT + 4
+      this.drawTable(groups)
     }
     this.footers()
   }
 
+  private drawTable(table: TableShape): void {
+    this.current = table
+    const fixed = table.columns.reduce((sum, column) => sum + column.width, 0)
+    this.widths = table.columns.map((column) => (column.width === 0 ? WIDTH - fixed : column.width))
+    if (table.rows.length === 0) {
+      this.y += GAP
+      this.line([{ text: words.none }], LEFT, this.y, 12.5)
+      this.y += 12.5 * LINE_HEIGHT
+      return
+    }
+    this.tableHeader()
+    for (const row of table.rows) {
+      this.row(row, false)
+    }
+    if (table.totals) {
+      this.row(this.totalsRow(), true)
+    }
+    this.netLine()
+  }
+
   // The totals row starts with its label, whatever the first column holds.
   private cellText(row: readonly Value[], index: number, total: boolean): string {
-    const column = this.table.columns[index]
+    const column = this.current.columns[index]
     const value = row[index]
     if (column === undefined) {
       return ''
@@ -97,11 +115,11 @@ class ReportLayout extends PdfLayout {
   }
 
   private totalsRow(): Value[] {
-    return this.table.columns.map((column, index) => {
+    return this.current.columns.map((column, index) => {
       if (index === 0) {
         return words.total
       }
-      return column.total === true ? columnTotal(this.table, index) : null
+      return column.total === true ? columnTotal(this.current, index) : null
     })
   }
 
@@ -159,13 +177,13 @@ class ReportLayout extends PdfLayout {
   // Text in the column that takes what is left wraps; every other cell is shortened to fit.
   private cellHeight(text: string, index: number, font: FontName): number {
     const width = (this.widths[index] ?? 0) - 2 * CELL_PADDING
-    return this.table.columns[index]?.width === 0 ? this.heightOf(text, font, SIZE, width) : SIZE * LINE_HEIGHT
+    return this.current.columns[index]?.width === 0 ? this.heightOf(text, font, SIZE, width) : SIZE * LINE_HEIGHT
   }
 
   private cells(texts: readonly string[], textY: number, font: FontName, colour = INK): void {
     let x = LEFT
     texts.forEach((text, index) => {
-      const column = this.table.columns[index]
+      const column = this.current.columns[index]
       const width = (this.widths[index] ?? 0) - 2 * CELL_PADDING
       const right = column !== undefined && column.kind !== 'text' && column.kind !== 'bsDate' && column.kind !== 'adDate'
       if (column?.width === 0) {
@@ -183,7 +201,7 @@ class ReportLayout extends PdfLayout {
   }
 
   private tableHeader(): void {
-    const texts = this.table.columns.map((column) => column.header)
+    const texts = this.current.columns.map((column) => column.header)
     const height = Math.max(...texts.map((text, index) => this.cellHeight(text, index, 'bold')))
     this.cells(texts, this.y + ROW_PADDING, 'bold', MUTED)
     this.y += ROW_PADDING + height + ROW_PADDING
@@ -209,11 +227,11 @@ class ReportLayout extends PdfLayout {
   }
 
   private netLine(): void {
-    const { net } = this.table
+    const { net } = this.current
     if (net === null) {
       return
     }
-    const value = columnTotal(this.table, net.columns[0]) - columnTotal(this.table, net.columns[1])
+    const value = columnTotal(this.current, net.columns[0]) - columnTotal(this.current, net.columns[1])
     const text = `${value < 0 ? net.negative : net.positive} ${formatReceiptAmount(Math.abs(value))}`
     this.makeRoom(GAP + 12.5 * LINE_HEIGHT)
     this.y += GAP

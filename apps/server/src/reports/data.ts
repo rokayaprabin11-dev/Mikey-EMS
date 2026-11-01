@@ -145,9 +145,16 @@ async function expenses(db: Db, header: Header): Promise<ReportOf<'expenses'>> {
       voidedBy: voided?.voidedBy.fullName ?? null,
     }
   })
+  const byName = new Map<string, { name: string; spent: number; voided: number }>()
+  for (const row of rows) {
+    const category = byName.get(row.categoryName) ?? { name: row.categoryName, spent: 0, voided: 0 }
+    category[row.kind === 'expense' ? 'spent' : 'voided'] += row.amount
+    byName.set(row.categoryName, category)
+  }
+  const byCategory = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
   const spent = sum(rows.filter((row) => row.kind === 'expense').map((row) => row.amount))
   const voidedTotal = sum(rows.filter((row) => row.kind === 'void').map((row) => row.amount))
-  return { type: 'expenses', header, rows, totals: { spent, voided: voidedTotal, net: spent - voidedTotal } }
+  return { type: 'expenses', header, rows, byCategory, totals: { spent, voided: voidedTotal, net: spent - voidedTotal } }
 }
 
 async function dayCloses(db: Db, header: Header): Promise<ReportOf<'day_closes'>> {

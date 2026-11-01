@@ -91,11 +91,11 @@ async function collect(day: Day, studentName: string, rupees: number, method: ob
   return collectPaymentResponseSchema.parse(response.json()).receipt
 }
 
-async function spend(day: Day, rupees: number, description: string, voucherNo?: string) {
+async function spend(day: Day, rupees: number, description: string, voucherNo?: string, categoryId = expenseCategoryId) {
   day.server.advanceMinutes(1)
   const response = await call(day, 'accountant', 'POST', '/expenses', {
     idempotencyKey: randomUUID(),
-    categoryId: expenseCategoryId,
+    categoryId,
     accountId: school.cashId,
     amount: rupees * 100,
     description,
@@ -148,15 +148,15 @@ async function pdfText(day: Day, path: string) {
   }
 }
 
-async function workbook(day: Day, path: string) {
+async function workbook(day: Day, path: string, sheetIndex = 0) {
   const response = await call(day, 'accountant', 'GET', path)
   expect(response.statusCode, response.body).toBe(200)
   expect(response.headers['content-type']).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   const book = new ExcelJS.Workbook()
   await book.xlsx.load(new Uint8Array(response.rawPayload).buffer)
-  const sheet = book.worksheets[0]
+  const sheet = book.worksheets[sheetIndex]
   if (sheet === undefined) {
-    throw new Error('The workbook has no sheet.')
+    throw new Error(`The workbook has no sheet ${sheetIndex + 1}.`)
   }
   return sheet
 }
@@ -291,20 +291,48 @@ describe('reports', () => {
     }
   })
 
-  it('lists expenses in the period, each void as its own line', async () => {
+  it('lists expenses in the period, each void as its own line, and adds them up by category', async () => {
+    const utilities = await third.server.db.expenseCategory.create({ data: { name: 'Utilities' } })
+    await spend(third, 1200, 'Electricity bill', undefined, utilities.id)
     const expenses = await report(third, 'expenses', first.date, third.date)
     if (expenses.type !== 'expenses') {
       throw new Error('Expected the expenses report.')
     }
-    expect(expenses.rows.map((row) => [row.kind, row.description, row.voucherNo, row.amount])).toEqual([
-      ['expense', 'Whiteboard markers and chalk', 'V-214', 45_000],
-      ['expense', 'Chalk typed twice', null, 26_000],
-      ['void', 'Chalk typed twice', null, 26_000],
+    expect(expenses.rows.map((row) => [row.kind, row.categoryName, row.description, row.voucherNo, row.amount])).toEqual([
+      ['expense', 'Stationery and teaching', 'Whiteboard markers and chalk', 'V-214', 45_000],
+      ['expense', 'Stationery and teaching', 'Chalk typed twice', null, 26_000],
+      ['void', 'Stationery and teaching', 'Chalk typed twice', null, 26_000],
+      ['expense', 'Utilities', 'Electricity bill', null, 120_000],
     ])
-    expect(expenses.totals).toEqual({ spent: 71_000, voided: 26_000, net: 45_000 })
-    const sheet = await workbook(third, `/reports/xlsx?type=expenses&from=${first.date}&to=${third.date}`)
+    expect(expenses.byCategory).toEqual([
+      { name: 'Stationery and teaching', spent: 71_000, voided: 26_000 },
+      { name: 'Utilities', spent: 120_000, voided: 0 },
+    ])
+    expect(expenses.totals).toEqual({ spent: 191_000, voided: 26_000, net: 165_000 })
+
+    const path = `/reports/xlsx?type=expenses&from=${first.date}&to=${third.date}`
+    const sheet = await workbook(third, path)
+    expect(sheet.name).toBe('Expenses')
     expect(sheet.getCell('D8').value).toBe('Whiteboard markers and chalk, voucher V-214')
-    expect(sheet.getCell('F11').value).toEqual({ formula: 'SUM(F8:F10)', result: 710 })
+    expect(sheet.getCell('F12').value).toEqual({ formula: 'SUM(F8:F11)', result: 1910 })
+
+    // The second sheet adds up the first sheet's lines for each category, with formulas.
+    const byCategory = await workbook(third, path, 1)
+    expect(byCategory.name).toBe('By category')
+    expect(byCategory.getCell('A2').value).toBe('Expenses by category')
+    expect(byCategory.getRow(7).values).toEqual([undefined, 'Category', 'Spent (Rs.)', 'Voided (Rs.)'])
+    expect(byCategory.getCell('A8').value).toBe('Stationery and teaching')
+    expect(byCategory.getCell('B8').value).toEqual({ formula: "SUMIFS('Expenses'!$F$8:$F$11,'Expenses'!$C$8:$C$11,$A8)", result: 710 })
+    expect(byCategory.getCell('C8').value).toEqual({ formula: "SUMIFS('Expenses'!$G$8:$G$11,'Expenses'!$C$8:$C$11,$A8)", result: 260 })
+    expect(byCategory.getCell('B9').value).toEqual({ formula: "SUMIFS('Expenses'!$F$8:$F$11,'Expenses'!$C$8:$C$11,$A9)", result: 1200 })
+    expect(byCategory.getCell('B10').value).toEqual({ formula: 'SUM(B8:B9)', result: 1910 })
+    expect(byCategory.getCell('A11').value).toBe('Net spent')
+    expect(byCategory.getCell('B11').value).toEqual({ formula: 'B10-C10', result: 1650 })
+
+    const { text } = await pdfText(third, `/reports/pdf?type=expenses&from=${first.date}&to=${third.date}`)
+    for (const expected of ['By category', 'Utilities', '1,200.00', '1,910.00', 'Net spent 1,650.00']) {
+      expect(text).toContain(expected)
+    }
   })
 
   it('shows the dues billed in the period by class, with what is still owed on them', async () => {

@@ -126,6 +126,7 @@ export const printEn = {
     description: 'Description',
     spent: 'Spent (Rs.)',
     netSpent: 'Net spent',
+    byCategory: 'By category',
     netReturned: 'Net returned',
     voucher: (voucherNo: string) => `voucher ${voucherNo}`,
     closedBy: 'Closed by',
