@@ -6,6 +6,7 @@ export const en = {
   crest: 'School crest',
   copyDetails: 'Copy error details',
   copied: 'Copied',
+  close: 'Close',
   weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
   roles: { super_admin: 'Super Admin', accountant: 'Accountant' },
   // Shown when something fails that the app does not know how to handle.
@@ -91,15 +92,8 @@ export const en = {
     },
     printer: {
       title: 'Receipt printer',
-      label: 'Printer',
-      none: 'No printers are set up on this computer.',
-      noneHelp:
-        'Add the receipt printer in Windows Settings, Printers, then look again. You can also finish now: each receipt will then open the Windows print window.',
-      lookAgain: 'Look again',
-      paper: 'Paper',
-      a5: 'A5 sheet',
-      paperHelp: 'Set by the school for all receipts',
-      testLater: 'You can print a test receipt after signing in, from Settings.',
+      finishWithout: 'You can also finish now: each receipt will then open the Windows print window.',
+      testLater: 'You can print a test receipt after signing in: choose your name in the top bar, then Printer.',
     },
     ready: {
       title: 'This counter is ready',
@@ -131,6 +125,25 @@ export const en = {
     typePassword: 'Type your password.',
     forgot: 'Forgot your password? Ask the Super Admin on Computer 1 to reset it.',
     changeServer: 'Change server address',
+  },
+  // Choosing the receipt printer, in setup and from the account menu.
+  printer: {
+    label: 'Printer',
+    none: 'No printers are set up on this computer.',
+    noneHelp: 'Add the receipt printer in Windows Settings, Printers, then look again.',
+    lookAgain: 'Look again',
+    paper: 'Paper',
+    a5: 'A5 sheet',
+    paperHelp: 'Set by the school for all receipts',
+    menu: 'Printer',
+    title: 'Receipt printer',
+    intro: 'Receipts print on this printer without asking. With none chosen, each receipt opens the Windows print window.',
+    testPrint: 'Print a test receipt',
+    testing: 'Printing…',
+    testSent: 'Test receipt sent to the printer.',
+    testFailed: 'The test receipt did not print. Check that the printer is on and has paper, then try again.',
+    save: 'Save printer',
+    cancel: 'Cancel',
   },
   // The sidebar and the top bar around every screen once signed in.
   frame: {

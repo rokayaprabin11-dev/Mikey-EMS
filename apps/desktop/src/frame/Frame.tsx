@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { Dashboard } from '../dashboard/Dashboard.tsx'
 import { en } from '../i18n/en.ts'
+import { PrinterDialog } from '../printing/PrinterDialog.tsx'
 import { useSession } from '../session/session.tsx'
 import { kathmanduHour } from '../today.ts'
 import { useLink } from './link.tsx'
@@ -29,6 +30,7 @@ export function Frame({ session }: { session: Session }) {
   const { signOut } = useSession()
   const link = useLink()
   const [screen, setScreen] = useState<Screen>('dashboard')
+  const [printerOpen, setPrinterOpen] = useState(false)
   const search = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -65,6 +67,7 @@ export function Frame({ session }: { session: Session }) {
             user={session.user}
             searchRef={search}
             onChooseStudent={() => setScreen('students')}
+            onPrinter={() => setPrinterOpen(true)}
             onSignOut={() => void signOut()}
           />
           <main className="flex-1 overflow-y-auto px-7 pt-5.5 pb-7">
@@ -72,6 +75,7 @@ export function Frame({ session }: { session: Session }) {
           </main>
         </div>
       </div>
+      <PrinterDialog open={printerOpen} onOpenChange={setPrinterOpen} />
       {blocked !== null && <Unreachable link={{ ...link, failing: blocked }} school={school ?? en.appName} />}
     </>
   )

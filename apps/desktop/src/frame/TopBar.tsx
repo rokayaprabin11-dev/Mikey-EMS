@@ -8,7 +8,7 @@ import {
   type StudentSummary,
 } from '@mikey/shared'
 import { cn } from 'cn'
-import { LogOut } from 'lucide-react'
+import { LogOut, Printer } from 'lucide-react'
 import type { Ref } from 'react'
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu.tsx'
@@ -57,7 +57,7 @@ function LinkPill() {
   )
 }
 
-function UserMenu({ user, onSignOut }: { user: CurrentUser; onSignOut: () => void }) {
+function UserMenu({ user, onPrinter, onSignOut }: { user: CurrentUser; onPrinter: () => void; onSignOut: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -76,6 +76,10 @@ function UserMenu({ user, onSignOut }: { user: CurrentUser; onSignOut: () => voi
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onPrinter}>
+          <Printer aria-hidden="true" />
+          {en.printer.menu}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSignOut}>
           <LogOut aria-hidden="true" />
           {en.frame.signOut}
@@ -91,6 +95,7 @@ export function TopBar({
   user,
   searchRef,
   onChooseStudent,
+  onPrinter,
   onSignOut,
 }: {
   title: string
@@ -98,6 +103,7 @@ export function TopBar({
   user: CurrentUser
   searchRef: Ref<HTMLInputElement>
   onChooseStudent: (student: StudentSummary) => void
+  onPrinter: () => void
   onSignOut: () => void
 }) {
   return (
@@ -109,7 +115,7 @@ export function TopBar({
       <StudentSearch inputRef={searchRef} onChoose={onChooseStudent} />
       <Today />
       <LinkPill />
-      <UserMenu user={user} onSignOut={onSignOut} />
+      <UserMenu user={user} onPrinter={onPrinter} onSignOut={onSignOut} />
     </header>
   )
 }

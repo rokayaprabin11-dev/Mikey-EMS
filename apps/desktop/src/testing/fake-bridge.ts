@@ -1,7 +1,7 @@
 import { errorMessage } from '@mikey/shared'
 import { type Mock, vi } from 'vitest'
 
-import type { Bridge, Printer, ReceiptPrinter, ServerReply, ServerRequest, StartAt } from '../../electron/bridge.ts'
+import type { Bridge, Printer, PrintResult, ReceiptPrinter, ServerReply, ServerRequest, StartAt } from '../../electron/bridge.ts'
 
 // A stand-in for the preload's bridge in screen tests: settings kept in memory, and a Computer 1
 // that answers each request from `answer`.
@@ -10,6 +10,7 @@ export interface FakeBridge extends Bridge {
   tested: string[]
   saved: { serverUrl: string | null; printer: ReceiptPrinter | null }
   finishStartup: Mock<(startAt: StartAt) => Promise<void>>
+  printPdf: Mock<(bytes: Uint8Array, printer: ReceiptPrinter | null) => Promise<PrintResult>>
 }
 
 export function json(status: number, body: unknown): ServerReply {
@@ -72,7 +73,9 @@ export function fakeBridge(options: {
       bridge.saved.printer = printer
       return Promise.resolve()
     },
-    printPdf: () => Promise.reject(new Error('Not used in these tests.')),
+    printPdf: vi.fn<(bytes: Uint8Array, printer: ReceiptPrinter | null) => Promise<PrintResult>>(() =>
+      Promise.resolve({ printed: true }),
+    ),
     savePdfOrExcel: () => Promise.reject(new Error('Not used in these tests.')),
     finishStartup: vi.fn<(startAt: StartAt) => Promise<void>>(() => Promise.resolve()),
   }
@@ -216,8 +219,13 @@ export const SITA = {
   outstanding: 360_000,
 }
 
+export const TEST_PDF = new TextEncoder().encode('%PDF-1.7 test receipt')
+
 // The signed-in routes of the Accountant's frame, for a Computer 1 made by computer1WithSignIn.
 export function frameRoutes(request: ServerRequest): ServerReply | null {
+  if (request.path === '/receipts/test') {
+    return { reached: true, status: 200, contentType: 'application/pdf', body: TEST_PDF }
+  }
   if (request.path === '/dashboard/finance') {
     return json(200, FINANCE_DASHBOARD)
   }
