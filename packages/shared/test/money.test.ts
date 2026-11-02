@@ -4,6 +4,7 @@ import {
   amountInWords,
   formatReceiptAmount,
   formatRupees,
+  formatRupeesInput,
   InvalidAmountError,
   parseRupees,
   toPaisaNumber,
@@ -94,6 +95,24 @@ describe('formatReceiptAmount', () => {
     [123_456_789, '12,34,567.89'],
   ])('always shows two decimals: %d paisa is %j', (paisa, text) => {
     expect(formatReceiptAmount(paisa)).toBe(text)
+  })
+})
+
+describe('formatRupeesInput', () => {
+  it.each([
+    [0, '0'],
+    [168_000, '1680'],
+    [390_050, '3900.50'],
+    [390_005, '3900.05'],
+    [123_456_700, '1234567'],
+  ])('puts %d paisa in an amount box as %j, which reads back the same', (paisa, text) => {
+    expect(formatRupeesInput(paisa)).toBe(text)
+    expect(parseRupees(text)).toBe(paisa)
+  })
+
+  it('refuses negative and fractional paisa', () => {
+    expect(() => formatRupeesInput(-100)).toThrow(RangeError)
+    expect(() => formatRupeesInput(1.5)).toThrow(RangeError)
   })
 })
 

@@ -78,6 +78,13 @@ export function formatReceiptAmount(paisa: number): string {
   return `${groupLakh(amount.rupees)}.${twoDigits(amount.paisa)}`
 }
 
+// An amount as it is typed into a box that already shows "Rs.": `1680`, or `1680.50` with paisa.
+// parseRupees reads it back to the same paisa.
+export function formatRupeesInput(paisa: number): string {
+  const amount = splitPaisa(paisa)
+  return amount.paisa === 0 ? String(amount.rupees) : `${amount.rupees}.${twoDigits(amount.paisa)}`
+}
+
 const UNITS = [
   'Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
   'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen',
