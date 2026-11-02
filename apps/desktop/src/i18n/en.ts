@@ -377,6 +377,8 @@ export const en = {
       printed: (receiptNo: string) => `Payment saved. Receipt ${receiptNo} sent to the printer.`,
       notPrinted: (receiptNo: string) => `Payment saved as receipt ${receiptNo}.`,
       printFailed: 'Printing failed. Ask the Super Admin to allow one more original.',
+      choosePrinter: 'Choose a printer to print the receipt.',
+      choosePrinterButton: 'Choose printer',
       printLater: 'It prints by itself when Computer 1 answers.',
       printUnsure: (problem: string) => `${problem} Print it again: Computer 1 sends the same original, and nothing more is used up.`,
       printAgain: 'Print again',

@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, type WebContents, webFrameMain } from 'electron'
 
 import type { Printer, PrintResult, ReceiptPrinter } from '../bridge.ts'
-import { printInTurn } from './print-order.ts'
+import { type Print, printInTurn, printSilently } from './print-order.ts'
 
 export async function listPrinters(contents: WebContents): Promise<Printer[]> {
   const printers = await contents.getPrintersAsync()
@@ -33,9 +33,9 @@ function pdfOpened(contents: WebContents, fileUrl: string): Promise<void> {
   })
 }
 
-// Opens the PDF in a hidden window and prints it. The file is written to a folder of its own and
-// removed straight after, so nothing stays on this computer.
-export async function printPdf(bytes: Uint8Array, printer: ReceiptPrinter | null): Promise<PrintResult> {
+// Opens the PDF in a hidden window and prints it in the given way. The file is written to a
+// folder of its own and removed straight after, so nothing stays on this computer.
+async function printWith(bytes: Uint8Array, send: (print: Print) => Promise<PrintResult>): Promise<PrintResult> {
   const folder = await mkdtemp(join(app.getPath('temp'), 'mikey-print-'))
   const file = join(folder, 'print.pdf')
   const window = new BrowserWindow({
@@ -53,12 +53,11 @@ export async function printPdf(bytes: Uint8Array, printer: ReceiptPrinter | null
       return { printed: false, reason: `The PDF did not open for printing within ${OPEN_TIMEOUT_MS / 1000} seconds.` }
     }
     await wait(SETTLE_MS)
-    return await printInTurn(
+    return await send(
       (options) =>
         new Promise((resolve) => {
           window.webContents.print(options, (printed, reason) => resolve(printed ? { printed } : { printed, reason }))
         }),
-      printer,
     )
   } finally {
     // Stops the timer; the race has already ended, so its rejection goes nowhere.
@@ -66,4 +65,14 @@ export async function printPdf(bytes: Uint8Array, printer: ReceiptPrinter | null
     window.close()
     await rm(folder, { recursive: true, force: true })
   }
+}
+
+// On the chosen printer, or else the Windows print window: test prints and copies.
+export function printPdf(bytes: Uint8Array, printer: ReceiptPrinter | null): Promise<PrintResult> {
+  return printWith(bytes, (print) => printInTurn(print, printer))
+}
+
+// A receipt's original: on the chosen printer only, never the print window.
+export function printOriginal(bytes: Uint8Array, printer: ReceiptPrinter): Promise<PrintResult> {
+  return printWith(bytes, (print) => printSilently(print, printer))
 }

@@ -11,6 +11,7 @@ import type {
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
+import type { ReceiptPrinter } from '../../electron/bridge.ts'
 import { api, ApiError, ReplyNotUnderstoodError, UnreachableError } from '../api/client.ts'
 import { bridge } from '../bridge.ts'
 import { en } from '../i18n/en.ts'
@@ -44,7 +45,14 @@ export interface Owner {
 // Computer 1 answered with something this app cannot use; it is sent again with Send again.
 export type Unconfirmed = { kind: 'waiting'; since: number } & ({ retry: 'auto' } | { retry: 'manual'; problem: string })
 
-export type PrintState = { kind: 'printing' } | { kind: 'printed' } | { kind: 'failed'; message: string } | Unconfirmed
+// 'noPrinter': no receipt printer is chosen, or Windows no longer has it. Nothing was asked for,
+// so the original is still to print, from here once a printer is chosen, or from Payments.
+export type PrintState =
+  | { kind: 'printing' }
+  | { kind: 'printed' }
+  | { kind: 'noPrinter' }
+  | { kind: 'failed'; message: string }
+  | Unconfirmed
 
 // `again`: sent once already with no answer, so it is still not confirmed while it goes.
 export type Stage =
@@ -138,16 +146,36 @@ export function isSettled(pending: Pending): boolean {
     return false
   }
   const { print } = pending.stage
-  return print.kind === 'printed' || print.kind === 'failed' || (print.kind === 'waiting' && print.retry === 'manual')
+  return (
+    print.kind === 'printed' ||
+    print.kind === 'noPrinter' ||
+    print.kind === 'failed' ||
+    (print.kind === 'waiting' && print.retry === 'manual')
+  )
 }
 
 function newDraft(student: ChosenStudent): Draft {
   return { student, ticked: {}, method: 'cash', reference: '', cashReceived: '' }
 }
 
-// Asks for the original and prints it. The print key makes asking again safe: the same key gets
-// the same PDF and uses up nothing more (DOMAIN_RULES §5).
+// The receipt printer, when one is chosen and Windows still has it.
+async function chosenPrinter(): Promise<ReceiptPrinter | null> {
+  const saved = await bridge().getPrinter()
+  if (saved === null) {
+    return null
+  }
+  const printers = await bridge().listPrinters()
+  return printers.some((printer) => printer.name === saved.name) ? saved : null
+}
+
+// Asks for the original and prints it, silently on the chosen printer only, so a print window
+// never uses the original up. With no printer chosen, nothing is asked for. The print key makes
+// asking again safe: the same key gets the same PDF and uses up nothing more (DOMAIN_RULES §5).
 async function printOriginal(paymentId: string, printKey: string): Promise<PrintState> {
+  const printer = await chosenPrinter()
+  if (printer === null) {
+    return { kind: 'noPrinter' }
+  }
   let pdf: Uint8Array
   try {
     pdf = await api.call('printReceipt', { params: { paymentId }, body: { printKey } })
@@ -155,7 +183,7 @@ async function printOriginal(paymentId: string, printKey: string): Promise<Print
     const outcome = outcomeOf(error)
     return outcome.kind === 'refused' ? { kind: 'failed', message: outcome.error.message } : outcome
   }
-  const result = await bridge().printPdf(pdf, await bridge().getPrinter())
+  const result = await bridge().printOriginal(pdf, printer)
   return result.printed ? { kind: 'printed' } : { kind: 'failed', message: words.saved.printFailed }
 }
 
@@ -284,7 +312,8 @@ export function CollectProvider({ children }: { children: ReactNode }) {
         }
       },
       printAgain() {
-        if (pending?.stage.kind === 'saved' && pending.stage.print.kind === 'waiting') {
+        const state = pending?.stage.kind === 'saved' ? pending.stage.print.kind : null
+        if (pending?.stage.kind === 'saved' && (state === 'waiting' || state === 'noPrinter')) {
           void print(pending.stage.receipt.paymentId, pending.stage.printKey)
         }
       },

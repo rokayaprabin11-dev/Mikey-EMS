@@ -30,6 +30,7 @@ import { Input } from '../components/ui/input.tsx'
 import { Label } from '../components/ui/label.tsx'
 import { RadioButton, RadioGroup } from '../components/ui/radio-group.tsx'
 import { problemOf } from '../connection.ts'
+import { PrinterDialog } from '../printing/PrinterDialog.tsx'
 import { useLink } from '../frame/link.tsx'
 import { StudentSearch } from '../frame/StudentSearch.tsx'
 import { en } from '../i18n/en.ts'
@@ -425,9 +426,21 @@ function SavedPanel({
   const { printAgain, next } = useCollect()
   const { receipt, print } = pending.stage
   const receiptNo = receipt.snapshot.receiptNo
+  // With no printer chosen, the Printer dialog opens by itself once; choosing one prints the original.
+  const [choosing, setChoosing] = useState(print.kind === 'noPrinter')
   let title = words.saved.notPrinted(receiptNo)
   let more: ReactNode = null
-  if (print.kind === 'printing') {
+  if (print.kind === 'noPrinter') {
+    more = (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-[13.5px] font-semibold text-ink">{words.saved.choosePrinter}</p>
+        <Button variant="secondary" onClick={() => setChoosing(true)}>
+          {words.saved.choosePrinterButton}
+        </Button>
+        <PrinterDialog open={choosing} onOpenChange={setChoosing} onSaved={printAgain} />
+      </div>
+    )
+  } else if (print.kind === 'printing') {
     title = words.saved.printing(receiptNo)
   } else if (print.kind === 'printed') {
     title = words.saved.printed(receiptNo)

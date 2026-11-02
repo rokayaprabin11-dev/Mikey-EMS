@@ -16,7 +16,7 @@ const words = en.printer
 
 // "Printer" in the account menu: the printer for receipts, and a test print on it before saving
 // (GET /receipts/test, which saves nothing and uses no receipt number).
-function PrinterForm({ onDone }: { onDone: () => void }) {
+function PrinterForm({ onDone, onSaved }: { onDone: () => void; onSaved?: () => void }) {
   const link = useLink()
   const choice = usePrinterChoice()
   const { selected } = choice
@@ -28,7 +28,10 @@ function PrinterForm({ onDone }: { onDone: () => void }) {
   })
   const save = useMutation({
     mutationFn: () => (selected === null ? Promise.resolve() : bridge().setPrinter(receiptPrinter(selected))),
-    onSuccess: onDone,
+    onSuccess: () => {
+      onDone()
+      onSaved?.()
+    },
   })
 
   let result: ReactNode = null
@@ -80,10 +83,19 @@ function PrinterForm({ onDone }: { onDone: () => void }) {
   )
 }
 
-export function PrinterDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+// `onSaved` is told once a printer is saved.
+export function PrinterDialog({
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSaved?: () => void
+}) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>{open && <PrinterForm onDone={() => onOpenChange(false)} />}</DialogContent>
+      <DialogContent>{open && <PrinterForm onDone={() => onOpenChange(false)} onSaved={onSaved} />}</DialogContent>
     </Dialog>
   )
 }

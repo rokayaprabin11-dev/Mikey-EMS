@@ -21,6 +21,7 @@ export interface FakeBridge extends Bridge {
   finishStartup: Mock<(startAt: StartAt) => Promise<void>>
   printPdf: Mock<(bytes: Uint8Array, printer: ReceiptPrinter | null) => Promise<PrintResult>>
   setCloseWarning: Mock<(warning: CloseWarning | null) => Promise<void>>
+  printOriginal: Mock<(bytes: Uint8Array, printer: ReceiptPrinter) => Promise<PrintResult>>
 }
 
 export function json(status: number, body: unknown): ServerReply {
@@ -84,6 +85,9 @@ export function fakeBridge(options: {
       return Promise.resolve()
     },
     printPdf: vi.fn<(bytes: Uint8Array, printer: ReceiptPrinter | null) => Promise<PrintResult>>(() =>
+      Promise.resolve({ printed: true }),
+    ),
+    printOriginal: vi.fn<(bytes: Uint8Array, printer: ReceiptPrinter) => Promise<PrintResult>>(() =>
       Promise.resolve({ printed: true }),
     ),
     savePdfOrExcel: () => Promise.reject(new Error('Not used in these tests.')),

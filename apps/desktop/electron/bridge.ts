@@ -66,6 +66,9 @@ export interface Bridge {
   // Prints on the chosen printer without asking; with no printer chosen, or when that fails, it
   // opens the Windows print window instead.
   printPdf(bytes: Uint8Array, printer: ReceiptPrinter | null): Promise<PrintResult>
+  // A receipt's original: only on the chosen printer, without asking, and never through the
+  // Windows print window, where a cancelled print would use the original up (DOMAIN_RULES §5).
+  printOriginal(bytes: Uint8Array, printer: ReceiptPrinter): Promise<PrintResult>
   savePdfOrExcel(bytes: Uint8Array, suggestedName: string): Promise<SaveResult>
   // Closing the app window asks this first, with Stay as the default; null closes it without asking.
   setCloseWarning(warning: CloseWarning | null): Promise<void>
@@ -84,6 +87,7 @@ export const CHANNELS = {
   getPrinter: 'settings:get-printer',
   setPrinter: 'settings:set-printer',
   printPdf: 'printing:print',
+  printOriginal: 'printing:print-original',
   savePdfOrExcel: 'files:save',
   setCloseWarning: 'app:set-close-warning',
   finishStartup: 'app:finish-startup',

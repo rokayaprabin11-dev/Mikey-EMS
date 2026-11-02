@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { CHANNELS, type CloseWarning, type StartAt } from '../bridge.ts'
 import { serverUrlFrom } from '../server-address.ts'
 import { SUGGESTED_NAME, savePdfOrExcel } from './files.ts'
-import { listPrinters, printPdf } from './printing.ts'
+import { listPrinters, printOriginal, printPdf } from './printing.ts'
 import { sendToServer, serverRequestSchema } from './server.ts'
 import type { SettingsStore } from './settings.ts'
 
@@ -60,6 +60,7 @@ export function registerBridge(
   ipcMain.handle(CHANNELS.printPdf, (_event, bytes, printer) =>
     printPdf(bytesSchema.parse(bytes), printerSchema.nullable().parse(printer)),
   )
+  ipcMain.handle(CHANNELS.printOriginal, (_event, bytes, printer) => printOriginal(bytesSchema.parse(bytes), printerSchema.parse(printer)))
   ipcMain.handle(CHANNELS.savePdfOrExcel, (event, bytes, suggestedName) =>
     savePdfOrExcel(windowOf(event.sender), bytesSchema.parse(bytes), z.string().regex(SUGGESTED_NAME).parse(suggestedName)),
   )
