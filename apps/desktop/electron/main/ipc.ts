@@ -3,7 +3,7 @@ import { hostname } from 'node:os'
 import { app, BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { z } from 'zod'
 
-import { CHANNELS, type StartAt } from '../bridge.ts'
+import { CHANNELS, type CloseWarning, type StartAt } from '../bridge.ts'
 import { serverUrlFrom } from '../server-address.ts'
 import { SUGGESTED_NAME, savePdfOrExcel } from './files.ts'
 import { listPrinters, printPdf } from './printing.ts'
@@ -15,6 +15,9 @@ const serverUrlSchema = z.string().refine((value) => serverUrlFrom(value) === va
 const printerSchema = z.object({ name: z.string().min(1), paper: z.literal('A5') })
 const bytesSchema = z.instanceof(Uint8Array)
 const startAtSchema = z.enum(['setup', 'get-allowed', 'sign-in']) satisfies z.ZodType<StartAt>
+const closeWarningSchema = z
+  .object({ message: z.string().min(1).max(500), stay: z.string().min(1).max(40), close: z.string().min(1).max(40) })
+  .nullable() satisfies z.ZodType<CloseWarning | null>
 
 const TEST_TIMEOUT_MS = 5_000
 
@@ -26,7 +29,11 @@ function windowOf(contents: WebContents): BrowserWindow {
   return window
 }
 
-export function registerBridge(settings: SettingsStore, finishStartup: (startAt: StartAt, from: WebContents) => void): void {
+export function registerBridge(
+  settings: SettingsStore,
+  finishStartup: (startAt: StartAt, from: WebContents) => void,
+  setCloseWarning: (warning: CloseWarning | null) => void,
+): void {
   ipcMain.handle(CHANNELS.appVersion, () => app.getVersion())
   ipcMain.handle(CHANNELS.computerName, () => hostname())
   ipcMain.handle(CHANNELS.getServerUrl, async () => (await settings.read()).serverUrl)
@@ -57,4 +64,5 @@ export function registerBridge(settings: SettingsStore, finishStartup: (startAt:
     savePdfOrExcel(windowOf(event.sender), bytesSchema.parse(bytes), z.string().regex(SUGGESTED_NAME).parse(suggestedName)),
   )
   ipcMain.handle(CHANNELS.finishStartup, (event, startAt) => finishStartup(startAtSchema.parse(startAt), event.sender))
+  ipcMain.handle(CHANNELS.setCloseWarning, (_event, warning) => setCloseWarning(closeWarningSchema.parse(warning)))
 }

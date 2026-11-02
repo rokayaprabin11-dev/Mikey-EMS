@@ -19,6 +19,7 @@ const bridge: Bridge = {
   setPrinter: (printer) => invoke(CHANNELS.setPrinter, printer),
   printPdf: (bytes, printer) => invoke(CHANNELS.printPdf, bytes, printer),
   savePdfOrExcel: (bytes, suggestedName) => invoke(CHANNELS.savePdfOrExcel, bytes, suggestedName),
+  setCloseWarning: (warning) => invoke(CHANNELS.setCloseWarning, warning),
   finishStartup: (startAt) => invoke(CHANNELS.finishStartup, startAt),
 }
 

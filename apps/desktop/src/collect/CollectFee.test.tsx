@@ -279,9 +279,16 @@ describe('Collect fee', () => {
     expect(ashwin.getAttribute('aria-checked')).toBe('true')
     expect(ashwin.closest('[inert]')).not.toBeNull()
     expect(screen.queryByRole('button', { name: /^Review/ })).toBeNull()
+    // Closing the app now asks first, with Stay as the default.
+    expect(bridge.setCloseWarning).toHaveBeenLastCalledWith({
+      message: 'A payment is waiting for Computer 1. If you close now it is forgotten. Close anyway?',
+      stay: 'Stay',
+      close: 'Close anyway',
+    })
 
     await waitForChecks(1)
     expect(await screen.findByText('Payment saved. Receipt 2083/84-001285 sent to the printer.')).toBeTruthy()
+    expect(bridge.setCloseWarning).toHaveBeenLastCalledWith(null)
     const sent = paymentsSent(bridge.sent)
     expect(sent).toHaveLength(2)
     expect(sent[1]).toEqual(sent[0])

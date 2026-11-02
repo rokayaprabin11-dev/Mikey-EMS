@@ -1,7 +1,16 @@
 import { errorMessage } from '@mikey/shared'
 import { type Mock, vi } from 'vitest'
 
-import type { Bridge, Printer, PrintResult, ReceiptPrinter, ServerReply, ServerRequest, StartAt } from '../../electron/bridge.ts'
+import type {
+  Bridge,
+  CloseWarning,
+  Printer,
+  PrintResult,
+  ReceiptPrinter,
+  ServerReply,
+  ServerRequest,
+  StartAt,
+} from '../../electron/bridge.ts'
 
 // A stand-in for the preload's bridge in screen tests: settings kept in memory, and a Computer 1
 // that answers each request from `answer`.
@@ -11,6 +20,7 @@ export interface FakeBridge extends Bridge {
   saved: { serverUrl: string | null; printer: ReceiptPrinter | null }
   finishStartup: Mock<(startAt: StartAt) => Promise<void>>
   printPdf: Mock<(bytes: Uint8Array, printer: ReceiptPrinter | null) => Promise<PrintResult>>
+  setCloseWarning: Mock<(warning: CloseWarning | null) => Promise<void>>
 }
 
 export function json(status: number, body: unknown): ServerReply {
@@ -78,6 +88,7 @@ export function fakeBridge(options: {
     ),
     savePdfOrExcel: () => Promise.reject(new Error('Not used in these tests.')),
     finishStartup: vi.fn<(startAt: StartAt) => Promise<void>>(() => Promise.resolve()),
+    setCloseWarning: vi.fn<(warning: CloseWarning | null) => Promise<void>>(() => Promise.resolve()),
   }
   window.mikey = bridge
   return bridge

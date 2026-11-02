@@ -232,6 +232,12 @@ export function CollectProvider({ children }: { children: ReactNode }) {
     [print, queryClient],
   )
 
+  // Closing the app while a payment is not confirmed asks first: it lives only in this window.
+  const unconfirmed = pending?.stage.kind === 'sending' || pending?.stage.kind === 'waiting'
+  useEffect(() => {
+    void bridge().setCloseWarning(unconfirmed ? words.closeWarning : null)
+  }, [unconfirmed])
+
   const forgetDraft = useCallback(() => {
     setDraft(null)
     setRefusal(null)

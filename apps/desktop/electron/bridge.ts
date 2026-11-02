@@ -38,6 +38,14 @@ export type PrintResult = { printed: true } | { printed: false; reason: string }
 
 export type SaveResult = { saved: true } | { saved: false }
 
+// What closing the app window asks while a payment Computer 1 has not confirmed is waiting. The
+// words come from the renderer, where every word of the app is kept.
+export interface CloseWarning {
+  message: string
+  stay: string
+  close: string
+}
+
 // Where the app window starts once the splash is done: setup from the start, the "Get allowed"
 // step of setup (Computer 1 answers but does not allow this computer), or sign-in.
 export type StartAt = 'setup' | 'get-allowed' | 'sign-in'
@@ -59,6 +67,8 @@ export interface Bridge {
   // opens the Windows print window instead.
   printPdf(bytes: Uint8Array, printer: ReceiptPrinter | null): Promise<PrintResult>
   savePdfOrExcel(bytes: Uint8Array, suggestedName: string): Promise<SaveResult>
+  // Closing the app window asks this first, with Stay as the default; null closes it without asking.
+  setCloseWarning(warning: CloseWarning | null): Promise<void>
   // Closes the splash and opens the app window.
   finishStartup(startAt: StartAt): Promise<void>
 }
@@ -75,5 +85,6 @@ export const CHANNELS = {
   setPrinter: 'settings:set-printer',
   printPdf: 'printing:print',
   savePdfOrExcel: 'files:save',
+  setCloseWarning: 'app:set-close-warning',
   finishStartup: 'app:finish-startup',
 } as const satisfies Record<keyof Bridge, string>

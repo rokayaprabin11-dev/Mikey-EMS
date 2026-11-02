@@ -364,6 +364,12 @@ export const en = {
       sending: 'Sending…',
       lastSaved: (receiptNo: string, time: string) => `Last confirmed save: receipt ${receiptNo} at ${time}.`,
     },
+    // Asked when the app is closed while a payment is not confirmed.
+    closeWarning: {
+      message: 'A payment is waiting for Computer 1. If you close now it is forgotten. Close anyway?',
+      stay: 'Stay',
+      close: 'Close anyway',
+    },
     saved: {
       printing: (receiptNo: string) => `Payment saved. Printing receipt ${receiptNo}…`,
       printed: (receiptNo: string) => `Payment saved. Receipt ${receiptNo} sent to the printer.`,

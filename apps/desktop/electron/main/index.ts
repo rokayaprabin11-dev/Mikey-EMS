@@ -1,8 +1,9 @@
 import { join } from 'node:path'
 
-import { app, BrowserWindow, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, type WebContents } from 'electron'
 
-import type { StartAt } from '../bridge.ts'
+import type { CloseWarning, StartAt } from '../bridge.ts'
+import { mayClose, STAY } from './close-warning.ts'
 import { registerBridge } from './ipc.ts'
 import { type SettingsStore, settingsStore } from './settings.ts'
 
@@ -27,6 +28,8 @@ function withDevServer(store: SettingsStore, serverUrl: string): SettingsStore {
 
 let splash: BrowserWindow | null = null
 let appWindow: BrowserWindow | null = null
+// Set by the renderer while a payment Computer 1 has not confirmed is waiting.
+let closeWarning: CloseWarning | null = null
 
 function newWindow(options: Electron.BrowserWindowConstructorOptions): BrowserWindow {
   const window = new BrowserWindow({
@@ -81,6 +84,23 @@ function finishStartup(startAt: StartAt, from: WebContents): void {
     return
   }
   const window = newWindow({ width: 1366, height: 768, backgroundColor: APP_BACKGROUND })
+  window.on('close', (event) => {
+    // Stay is button 0 (STAY) and Close anyway button 1 (CLOSE).
+    const ask = (warning: CloseWarning): number =>
+      dialog.showMessageBoxSync(window, {
+        type: 'warning',
+        message: warning.message,
+        buttons: [warning.stay, warning.close],
+        defaultId: STAY,
+        cancelId: STAY,
+        noLink: true,
+      })
+    if (mayClose(closeWarning, ask)) {
+      closeWarning = null
+    } else {
+      event.preventDefault()
+    }
+  })
   window.once('ready-to-show', () => {
     window.show()
     splash?.close()
@@ -92,7 +112,9 @@ function finishStartup(startAt: StartAt, from: WebContents): void {
 
 void app.whenReady().then(() => {
   const settings = settingsStore(app.getPath('userData'))
-  registerBridge(DEV_SERVER_URL === null ? settings : withDevServer(settings, DEV_SERVER_URL), finishStartup)
+  registerBridge(DEV_SERVER_URL === null ? settings : withDevServer(settings, DEV_SERVER_URL), finishStartup, (warning) => {
+    closeWarning = warning
+  })
   openSplash()
 })
 
