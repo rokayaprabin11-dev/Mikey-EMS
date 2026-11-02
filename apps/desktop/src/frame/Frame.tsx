@@ -1,6 +1,9 @@
 import type { Session } from '@mikey/shared'
 import { useEffect, useRef, useState } from 'react'
 
+import { CollectFee } from '../collect/CollectFee.tsx'
+import { type ChosenStudent, isSettled, useCollect, useSendAgainWhenBack } from '../collect/payment.tsx'
+import { WaitingPayment } from '../collect/WaitingPayment.tsx'
 import { Dashboard } from '../dashboard/Dashboard.tsx'
 import { en } from '../i18n/en.ts'
 import { PrinterDialog } from '../printing/PrinterDialog.tsx'
@@ -29,9 +32,23 @@ function NotBuilt({ screen }: { screen: Screen }) {
 export function Frame({ session }: { session: Session }) {
   const { signOut } = useSession()
   const link = useLink()
-  const [screen, setScreen] = useState<Screen>('dashboard')
+  const collect = useCollect()
+  const { pending, forgetDraft } = collect
+  // A payment not finished at the last sign-out is where the app opens again.
+  const [screen, setScreen] = useState<Screen>(() => (pending !== null && !isSettled(pending) ? 'collectFee' : 'dashboard'))
   const [printerOpen, setPrinterOpen] = useState(false)
   const search = useRef<HTMLInputElement>(null)
+
+  useSendAgainWhenBack(session.user.id, link.last?.at ?? null)
+  // Signing out leaves nothing of the form behind.
+  useEffect(() => forgetDraft, [forgetDraft])
+
+  // A student chosen anywhere opens Collect fee with them, unless a payment is not finished:
+  // then Collect fee shows that payment, and nothing new can be started.
+  function openCollect(student: ChosenStudent): void {
+    collect.start(student)
+    setScreen('collectFee')
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -55,6 +72,7 @@ export function Frame({ session }: { session: Session }) {
       ? words.dashboardTitle(kathmanduHour(new Date(health.time)), firstName)
       : words.screens[screen]
   const blocked = link.state === 'unavailable' && link.failing !== null ? link.failing : null
+  const unconfirmed = pending !== null && (pending.stage.kind === 'sending' || pending.stage.kind === 'waiting') ? pending : null
 
   return (
     <>
@@ -63,20 +81,28 @@ export function Frame({ session }: { session: Session }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar
             title={title}
-            subtitle={screen === 'dashboard' ? words.dashboardSubtitle : words.counter}
+            subtitle={screen === 'dashboard' || screen === 'collectFee' ? words.dashboardSubtitle : words.counter}
             user={session.user}
             searchRef={search}
-            onChooseStudent={() => setScreen('students')}
+            onChooseStudent={(student) => openCollect({ ref: student, summary: student })}
             onPrinter={() => setPrinterOpen(true)}
             onSignOut={() => void signOut()}
           />
           <main className="flex-1 overflow-y-auto px-7 pt-5.5 pb-7">
-            {screen === 'dashboard' ? <Dashboard onOpen={setScreen} /> : <NotBuilt screen={screen} />}
+            {screen === 'dashboard' && <Dashboard onOpen={setScreen} onCollect={(student) => openCollect({ ref: student, summary: null })} />}
+            {screen === 'collectFee' && <CollectFee session={session} />}
+            {screen !== 'dashboard' && screen !== 'collectFee' && <NotBuilt screen={screen} />}
           </main>
         </div>
       </div>
       <PrinterDialog open={printerOpen} onOpenChange={setPrinterOpen} />
-      {blocked !== null && <Unreachable link={{ ...link, failing: blocked }} school={school ?? en.appName} />}
+      {blocked !== null && (
+        <Unreachable
+          link={{ ...link, failing: blocked }}
+          school={school ?? en.appName}
+          payment={unconfirmed === null ? null : <WaitingPayment pending={unconfirmed} lastSaved={collect.lastSaved} userId={session.user.id} />}
+        />
+      )}
     </>
   )
 }

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { newQueryClient } from '../api/query.ts'
@@ -71,7 +71,8 @@ describe("the Accountant's dashboard", () => {
   it('opens Collect fee with F2 and the student search with Ctrl+K', async () => {
     await signedIn()
     fireEvent.keyDown(window, { key: 'F2' })
-    expect(await screen.findByText('This screen is built in Phase 6a.')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Collect fee' })).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Find student' })))
 
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
     expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Search students' }))
@@ -92,9 +93,12 @@ describe("the Accountant's dashboard", () => {
     expect(await screen.findByText('No student matches “bibak”.')).toBeTruthy()
     expect(screen.getByText('Check the spelling, or search by student ID or guardian phone.')).toBeTruthy()
 
+    // Choosing a student opens Collect fee with them.
     fireEvent.change(search, { target: { value: 'sita' } })
     await screen.findByRole('option', { name: /Sita Gurung/ })
     fireEvent.keyDown(search, { key: 'Enter' })
-    expect(await screen.findByText('This screen is built in Phase 6f.')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Collect fee' })).toBeTruthy()
+    expect(screen.getByText('MEMS-2079-0123, Class 4 B, roll 12. Guardian Hari Gurung, 9841234567')).toBeTruthy()
+    expect(await screen.findByRole('checkbox', { name: 'Pay Monthly tuition, Kartik 2083' })).toBeTruthy()
   })
 })

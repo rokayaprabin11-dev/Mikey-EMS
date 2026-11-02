@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { StartAt } from '../electron/bridge.ts'
+import { CollectProvider } from './collect/payment.tsx'
 import { Frame } from './frame/Frame.tsx'
 import { LinkProvider } from './frame/link.tsx'
 import { SessionProvider, useSession } from './session/session.tsx'
@@ -26,9 +27,13 @@ export function App({ startAt }: { startAt: StartAt }) {
   if (screen !== 'sign-in') {
     return <Setup key={screen} startAt={screen} onDone={() => setScreen('sign-in')} />
   }
+  // The payment being collected sits above the session: one Computer 1 has not confirmed
+  // outlives a sign-out (collect/payment.tsx).
   return (
-    <SessionProvider>
-      <SignedInOrNot onChangeServer={() => setScreen('setup')} />
-    </SessionProvider>
+    <CollectProvider>
+      <SessionProvider>
+        <SignedInOrNot onChangeServer={() => setScreen('setup')} />
+      </SessionProvider>
+    </CollectProvider>
   )
 }

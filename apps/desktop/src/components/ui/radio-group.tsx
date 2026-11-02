@@ -44,4 +44,22 @@ function RadioCard({
   )
 }
 
-export { RadioGroup, RadioCard }
+// A choice shown as a button, with no mark: Collect fee's payment methods. The selected one has a
+// 2px action border on the action tint, its padding 1px less so nothing moves.
+function RadioButton({
+  className,
+  ...props
+}: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
+  return (
+    <RadioGroupPrimitive.Item
+      data-slot="radio-button"
+      className={cn(
+        "h-10 cursor-pointer rounded-md border border-line-strong bg-surface px-3.5 font-semibold whitespace-nowrap text-ink outline-none hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action data-[state=checked]:border-2 data-[state=checked]:border-action data-[state=checked]:bg-action-tint data-[state=checked]:px-[13px] data-[state=checked]:text-action-hover",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { RadioGroup, RadioCard, RadioButton }

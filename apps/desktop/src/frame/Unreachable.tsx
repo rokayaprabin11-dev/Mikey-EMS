@@ -1,5 +1,6 @@
 import { formatKathmanduTime } from '@mikey/shared'
 import { MonitorX } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 import { Crest } from '../components/Crest.tsx'
 import { Button } from '../components/ui/button.tsx'
@@ -10,8 +11,16 @@ const words = en.unreachable
 
 // Shown over the app once Computer 1 has not answered for 15 seconds (ARCHITECTURE.md, Health
 // and connection status). The app stays as it was underneath and comes back by itself when
-// Computer 1 answers again.
-export function Unreachable({ link, school }: { link: Link & { failing: NonNullable<Link['failing']> }; school: string }) {
+// Computer 1 answers again. `payment` is a confirmed payment Computer 1 has not answered for.
+export function Unreachable({
+  link,
+  school,
+  payment,
+}: {
+  link: Link & { failing: NonNullable<Link['failing']> }
+  school: string
+  payment: ReactNode
+}) {
   const { failing } = link
   // No reply at all gets the design's own words and the checks; a reply that cannot be used
   // (its database has stopped, or a different version) says what it is.
@@ -34,6 +43,7 @@ export function Unreachable({ link, school }: { link: Link & { failing: NonNulla
             {noReply ? words.title : failing.problem.title}
           </h2>
           <p className="max-w-160 text-[17px] leading-relaxed text-ink-soft">{noReply ? words.intro : failing.problem.help}</p>
+          {payment !== null && <div className="w-full">{payment}</div>}
           <div className="mt-2 flex flex-wrap items-center gap-4">
             <Button size="xl" autoFocus onClick={link.retry}>
               {words.tryAgain}

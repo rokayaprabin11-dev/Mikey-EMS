@@ -29,13 +29,17 @@ function countdown(ms: number): string {
 
 // Signs out after `idleMinutes` without activity, warning in the last minute. Keys, clicks and
 // scrolling are activity, so a long form being typed never runs out; the server's idle time
-// starts again with every signed-in request.
+// starts again with every signed-in request. While a confirmed payment is not finished (`paused`),
+// this computer does not sign out by itself: its "Not confirmed yet" box stays until Computer 1
+// answers, and Computer 1 then decides whether the session has ended.
 export function IdleWarning({
   idleMinutes,
+  paused,
   onSignOut,
   onEnd,
 }: {
   idleMinutes: number
+  paused: boolean
   onSignOut: () => void
   onEnd: (why: string) => void
 }) {
@@ -45,7 +49,7 @@ export function IdleWarning({
     return () => clearInterval(timer)
   }, [])
 
-  const left = (api.sessionUsedAt() ?? now) + idleMinutes * MINUTE_MS - now
+  const left = paused ? Infinity : (api.sessionUsedAt() ?? now) + idleMinutes * MINUTE_MS - now
   const stay = (): void => void keepAlive().then(() => setNow(Date.now()))
   const warning = left <= WARNING_MS
   const over = left <= 0

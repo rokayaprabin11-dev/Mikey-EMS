@@ -99,7 +99,8 @@ function failure(status: number, code: string, message: string): ServerReply {
 
 // A Computer 1 that signs bikash.acc in and keeps the session until `ended` or `reachable` says
 // otherwise; `databaseDown` makes /health say its database has stopped. Its clock reads `time`.
-export function computer1WithSignIn(time = '2026-10-29T04:19:00.000Z') {
+// `more` answers signed-in routes before the frame's own.
+export function computer1WithSignIn(time = '2026-10-29T04:19:00.000Z', more: (request: ServerRequest) => ServerReply | null = () => null) {
   const state = {
     ended: false,
     reachable: true,
@@ -116,9 +117,12 @@ export function computer1WithSignIn(time = '2026-10-29T04:19:00.000Z') {
     }
     if (route === 'POST /auth/login') {
       const body = JSON.parse(request.body ?? '{}') as { username: string; password: string }
-      return body.username === BIKASH.username && body.password === PASSWORD
-        ? json(200, { token: TOKEN, user: BIKASH, idleTimeoutMinutes: 15 })
-        : failure(401, 'WRONG_USERNAME_OR_PASSWORD', state.wrongPasswordMessage)
+      if (body.username !== BIKASH.username || body.password !== PASSWORD) {
+        return failure(401, 'WRONG_USERNAME_OR_PASSWORD', state.wrongPasswordMessage)
+      }
+      // Signing in again starts a new session.
+      state.ended = false
+      return json(200, { token: TOKEN, user: BIKASH, idleTimeoutMinutes: 15 })
     }
     if (request.token !== TOKEN) {
       return failure(401, 'NOT_SIGNED_IN', errorMessage('NOT_SIGNED_IN'))
@@ -133,9 +137,9 @@ export function computer1WithSignIn(time = '2026-10-29T04:19:00.000Z') {
       state.ended = true
       return { reached: true, status: 204, contentType: '', body: new Uint8Array() }
     }
-    const frame = frameRoutes(request)
-    if (frame !== null) {
-      return frame
+    const answered = more(request) ?? frameRoutes(request)
+    if (answered !== null) {
+      return answered
     }
     throw new Error(`Not expected: ${route}`)
   }
@@ -221,6 +225,25 @@ export const SITA = {
 
 export const TEST_PDF = new TextEncoder().encode('%PDF-1.7 test receipt')
 
+// Sita owes this month's tuition, due by 15 Kartik 2083 (1 Nov 2026).
+const SITA_DUES = {
+  studentId: SITA.id,
+  items: [
+    {
+      kind: 'fee',
+      feeDueId: '1b1c7a0b-2f7e-4dac-9e1b-0a3f5e7c9d10',
+      headName: 'Monthly tuition',
+      periodLabel: 'Kartik 2083',
+      dueDate: '2026-11-01',
+      amount: 360_000,
+      discount: 0,
+      paid: 0,
+      remaining: 360_000,
+    },
+  ],
+  total: 360_000,
+}
+
 // The signed-in routes of the Accountant's frame, for a Computer 1 made by computer1WithSignIn.
 export function frameRoutes(request: ServerRequest): ServerReply | null {
   if (request.path === '/receipts/test') {
@@ -228,6 +251,9 @@ export function frameRoutes(request: ServerRequest): ServerReply | null {
   }
   if (request.path === '/dashboard/finance') {
     return json(200, FINANCE_DASHBOARD)
+  }
+  if (request.path === `/students/${SITA.id}/dues`) {
+    return json(200, SITA_DUES)
   }
   if (request.path.startsWith('/students?')) {
     const q = new URLSearchParams(request.path.split('?')[1]).get('q') ?? ''

@@ -95,8 +95,8 @@ The components live in `apps/desktop/src/components/ui` (DECISIONS D27). Add one
 | Need | Component | Notes |
 | --- | --- | --- |
 | Buttons | `Button` | Variants: primary (`action`), secondary (white, `line-strong` border), dark (`ink`, for confirm-in-dialog), destructive (`bad`). Sizes: default 40px, `lg` 44px, `xl` 48px with 10px corners. Disabled primary, dark and destructive buttons are `line-strong` with `ink-soft` text. Labels say the action: "Collect fee", "Save expense", "Approve void" |
-| Inputs | `Input`, `Select`, `Textarea`, `RadioGroup`, `Checkbox` | Label above, help text below in `ink-muted`, error below in `bad` with 2px `bad` border and `aria-invalid`. A choice between a few options is a `RadioGroup` of `RadioCard`s: white cards with a round mark at the start, the selected one with a 2px `action` border |
-| Money input | custom `MoneyInput` | "Rs." prefix, right-aligned, tabular, parses with `parseRupees` |
+| Inputs | `Input`, `Select`, `Textarea`, `RadioGroup`, `Checkbox` | Label above, help text below in `ink-muted`, error below in `bad` with 2px `bad` border and `aria-invalid`. A choice between a few options is a `RadioGroup` of `RadioCard`s: white cards with a round mark at the start, the selected one with a 2px `action` border. Collect fee's payment methods are `RadioButton`s, the design's method buttons: no mark, the selected one with a 2px `action` border on `action-tint`. A `Checkbox` is an 18px box with a 2px `ink-muted` border, filled with `action` and a white tick when checked |
+| Money input | custom `MoneyInput` (`src/components/MoneyInput.tsx`) | "Rs." prefix, right-aligned, tabular, parses with `parseRupees` |
 | BS date input | custom `BsDateInput` | Accepts `2083-07-12`, shows "12 Kartik 2083, 29 Oct 2026" under it, allows day 32 |
 | Tables | `Table` | Header row `surface-muted`, 12.5px `ink-muted`; rows 13.5px with `line-soft` dividers; totals row bold; pagination below |
 | Status chip | `Badge` | Tint background + strong text colour from the status tokens |
@@ -109,7 +109,7 @@ The components live in `apps/desktop/src/components/ui` (DECISIONS D27). Add one
 
 ## Screen patterns
 
-- **Collect fee**: left = steps (Find student → Choose dues → Take payment → Confirm and print), student card, dues list with checkbox + editable amount, method buttons, cash received and change. Right = live receipt preview with torn-paper edge, total in large Anek numerals, amount in words, then the "Review payment" button. Confirm in a dark-bordered panel. Success panel is green with "View receipt" and "Next student".
+- **Collect fee**: left = steps (Find student → Choose dues → Take payment → Confirm and print), student card, dues list with checkbox + editable amount, method buttons, cash received and change. Right = live receipt preview with torn-paper edge, total in large Anek numerals, amount in words, then the "Review payment" button. Confirm in a dark-bordered panel. Success panel is green with "View receipt" and "Next student". A payment Computer 1 has not answered for shows the `bad-tint` "Not confirmed yet. Don't hand over a receipt." box in place of the panel, and the form stays on the screen, locked.
 - **Dues shown with emphasis**: a panel with a 2px `warn` border and the amount in large `warn` numerals.
 - **Needs a decision** (void request, unlinked IDs): panel with a 2px `warn` border.
 - **Destructive confirmation** (restore, approve void): 2px `bad` border; destructive button stays disabled until the safeguard is met.

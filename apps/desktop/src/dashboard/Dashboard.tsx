@@ -7,6 +7,7 @@ import {
   formatRupees,
   printEn,
   type RecordStatus,
+  type StudentRef,
 } from '@mikey/shared'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from 'cn'
@@ -193,7 +194,16 @@ function LatestReceipts({ receipts, onOpen }: { receipts: FinanceDashboard['late
   )
 }
 
-function LargestDues({ dues, onOpen }: { dues: FinanceDashboard['largestDues']; onOpen: (screen: Screen) => void }) {
+// Each row opens Collect fee with that student.
+function LargestDues({
+  dues,
+  onOpen,
+  onCollect,
+}: {
+  dues: FinanceDashboard['largestDues']
+  onOpen: (screen: Screen) => void
+  onCollect: (student: StudentRef) => void
+}) {
   return (
     <Panel title={words.largestDues} action={<LinkButton onClick={() => onOpen('reports')}>{words.duesReport}</LinkButton>}>
       {dues.length === 0 ? (
@@ -201,14 +211,20 @@ function LargestDues({ dues, onOpen }: { dues: FinanceDashboard['largestDues']; 
       ) : (
         <ul>
           {dues.map((due) => (
-            <li key={due.student.id} className="flex items-start justify-between gap-4 border-t border-line-soft px-5 py-3">
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="font-semibold">{due.student.fullName}</span>
-                <span className="text-[13px] text-ink-muted">
-                  {`${words.classOf(due.student.className, due.student.sectionName)}, ${describeDues(due.items)}`}
+            <li key={due.student.id} className="border-t border-line-soft">
+              <button
+                type="button"
+                onClick={() => onCollect(due.student)}
+                className="flex w-full cursor-pointer items-start justify-between gap-4 px-5 py-3 text-left outline-none hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-action"
+              >
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-semibold">{due.student.fullName}</span>
+                  <span className="text-[13px] text-ink-muted">
+                    {`${words.classOf(due.student.className, due.student.sectionName)}, ${describeDues(due.items)}`}
+                  </span>
                 </span>
-              </div>
-              <span className="font-semibold whitespace-nowrap text-warn tabular-nums">{formatRupees(due.amount)}</span>
+                <span className="font-semibold whitespace-nowrap text-warn tabular-nums">{formatRupees(due.amount)}</span>
+              </button>
             </li>
           ))}
         </ul>
@@ -271,7 +287,7 @@ function CloseTheDay({ dashboard, onOpen }: { dashboard: FinanceDashboard; onOpe
 // The Accountant's Main screen (DOMAIN_RULES §12, `GET /dashboard/finance`). Its figures are
 // asked for each time the screen opens and are never refreshed behind the screen's back, so an
 // unused app is still signed out when idle.
-export function Dashboard({ onOpen }: { onOpen: (screen: Screen) => void }) {
+export function Dashboard({ onOpen, onCollect }: { onOpen: (screen: Screen) => void; onCollect: (student: StudentRef) => void }) {
   const link = useLink()
   const dashboard = useQuery({ queryKey: ['dashboard', 'finance'], queryFn: () => api.call('financeDashboard') })
 
@@ -306,7 +322,7 @@ export function Dashboard({ onOpen }: { onOpen: (screen: Screen) => void }) {
           </Panel>
         </div>
         <div className="grid items-start gap-5 lg:grid-cols-2">
-          <LargestDues dues={data.largestDues} onOpen={onOpen} />
+          <LargestDues dues={data.largestDues} onOpen={onOpen} onCollect={onCollect} />
           <TodaysExpenses expenses={data.todaysExpenses} onOpen={onOpen} />
         </div>
         <CloseTheDay dashboard={data} onOpen={onOpen} />

@@ -13,9 +13,18 @@ const words = en.search
 // Waits for a pause in typing before asking Computer 1.
 const PAUSE_MS = 250
 
-// The top bar's student search (Ctrl+K): name, student ID, roll number or guardian phone, the
-// first or the last digits (DOMAIN_RULES §11).
-export function StudentSearch({ inputRef, onChoose }: { inputRef: Ref<HTMLInputElement>; onChoose: (student: StudentSummary) => void }) {
+// The student search: name, student ID, roll number or guardian phone, the first or the last
+// digits (DOMAIN_RULES §11). The top bar has it (Ctrl+K), and Collect fee has the same search,
+// larger (F2).
+export function StudentSearch({
+  inputRef,
+  onChoose,
+  variant = 'topBar',
+}: {
+  inputRef: Ref<HTMLInputElement>
+  onChoose: (student: StudentSummary) => void
+  variant?: 'topBar' | 'collectFee'
+}) {
   const link = useLink()
   const [typed, setTyped] = useState('')
   const [asked, setAsked] = useState('')
@@ -110,13 +119,14 @@ export function StudentSearch({ inputRef, onChoose }: { inputRef: Ref<HTMLInputE
     )
   }
 
+  const large = variant === 'collectFee'
   return (
-    <div className="relative min-w-0 flex-1 basis-56">
+    <div className={cn('relative min-w-0', !large && 'flex-1 basis-56')}>
       <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 size-4.5 -translate-y-1/2 text-ink-muted" />
       <input
         ref={inputRef}
         role="combobox"
-        aria-label={words.label}
+        aria-label={large ? en.collect.find : words.label}
         aria-expanded={showing}
         aria-controls={listId}
         aria-autocomplete="list"
@@ -130,11 +140,20 @@ export function StudentSearch({ inputRef, onChoose }: { inputRef: Ref<HTMLInputE
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
         placeholder={words.placeholder}
-        className="h-11 w-full rounded-md border border-line-strong bg-surface-muted pr-16 pl-10 text-ink outline-none placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-action"
+        className={cn(
+          'w-full rounded-md text-ink outline-none placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-action',
+          large
+            ? 'h-11.5 border-2 border-action bg-surface pr-40 pl-10 text-base'
+            : 'h-11 border border-line-strong bg-surface-muted pr-16 pl-10',
+        )}
       />
-      <kbd className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 rounded-sm border border-line-strong bg-surface px-1.5 font-sans text-xs text-ink-muted">
-        {words.shortcut}
-      </kbd>
+      {large ? (
+        <span className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-xs text-ink-muted">{en.collect.findHint}</span>
+      ) : (
+        <kbd className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 rounded-sm border border-line-strong bg-surface px-1.5 font-sans text-xs text-ink-muted">
+          {words.shortcut}
+        </kbd>
+      )}
       {showing && (
         <div className="absolute top-full right-0 left-0 z-30 mt-1.5 rounded-md border border-line-strong bg-surface text-sm">{panel}</div>
       )}

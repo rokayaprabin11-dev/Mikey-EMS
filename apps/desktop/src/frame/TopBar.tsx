@@ -13,16 +13,10 @@ import type { Ref } from 'react'
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu.tsx'
 import { en } from '../i18n/en.ts'
+import { initials } from '../initials.ts'
 import { weekdayOf } from '../today.ts'
 import { useLink } from './link.tsx'
 import { StudentSearch } from './StudentSearch.tsx'
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  const first = parts[0]?.[0] ?? ''
-  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : ''
-  return `${first}${last}`.toUpperCase()
-}
 
 // Today on Computer 1's clock: "Thursday, 12 Kartik 2083" over "29 Oct 2026, 10:54 AM".
 function Today() {

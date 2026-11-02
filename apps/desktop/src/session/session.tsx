@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 import { api } from '../api/client.ts'
+import { usePaymentUnfinished } from '../collect/payment.tsx'
 import { IdleWarning } from './IdleWarning.tsx'
 import { isSessionGone } from './keep-alive.ts'
 
@@ -27,6 +28,7 @@ export function useSession(): SessionValue {
 // The signed-in person, kept in memory only (ARCHITECTURE.md, Sessions and auth).
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
+  const paymentUnfinished = usePaymentUnfinished()
   const [session, setSession] = useState<Session | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -74,7 +76,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     <SessionContext value={value}>
       {children}
       {session !== null && (
-        <IdleWarning idleMinutes={session.idleTimeoutMinutes} onSignOut={() => void value.signOut()} onEnd={end} />
+        <IdleWarning
+          idleMinutes={session.idleTimeoutMinutes}
+          paused={paymentUnfinished}
+          onSignOut={() => void value.signOut()}
+          onEnd={end}
+        />
       )}
     </SessionContext>
   )
