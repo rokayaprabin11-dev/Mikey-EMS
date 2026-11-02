@@ -155,6 +155,30 @@ describe('Collect fee', () => {
     expect(bridge.sent.some((request) => request.body?.includes('6000') === true)).toBe(false)
   })
 
+  it('ticks every due with Tick all dues or Ctrl+A in the list, keeping an amount already typed', async () => {
+    await atTheCounter()
+    await chooseBibek()
+    tick('Monthly tuition, Kartik 2083')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Amount for Monthly tuition, Kartik 2083' }), { target: { value: '2000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tick all dues' }))
+    expect(screen.getAllByRole('checkbox').map((box) => box.getAttribute('aria-checked'))).toEqual(['true', 'true', 'true'])
+    expect(screen.getAllByRole<HTMLInputElement>('textbox', { name: /^Amount for/ }).map((box) => box.value)).toEqual(['1680', '100', '2000'])
+    expect(await screen.findByRole('button', { name: 'Review Rs. 3,780 payment' })).toBeTruthy()
+
+    tick('Late fine, Ashwin 2083')
+    tick('Monthly tuition, Ashwin 2083')
+    const fine = screen.getByRole('checkbox', { name: 'Pay Late fine, Ashwin 2083' })
+    fine.focus()
+    press('a', { ctrlKey: true })
+    expect(screen.getAllByRole('checkbox').map((box) => box.getAttribute('aria-checked'))).toEqual(['true', 'true', 'true'])
+
+    // In an amount box, Ctrl+A is the usual select-all and ticks nothing.
+    tick('Late fine, Ashwin 2083')
+    screen.getByRole('textbox', { name: 'Amount for Monthly tuition, Kartik 2083' }).focus()
+    press('a', { ctrlKey: true })
+    expect(fine.getAttribute('aria-checked')).toBe('false')
+  })
+
   it('takes a part payment: the amount can be changed, and the receipt says what is still due', async () => {
     await atTheCounter()
     await chooseBibek()

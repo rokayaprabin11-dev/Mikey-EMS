@@ -279,6 +279,8 @@ export const en = {
     dues: {
       title: 'What is being paid',
       help: 'Oldest dues first. Change an amount to take a part payment.',
+      tickAll: 'Tick all dues',
+      tickAllKeys: 'Ctrl+A',
       loading: 'Loading what is owed…',
       none: (name: string) => `${name} owes nothing.`,
       noneHelp: 'There is no fee to collect. Find another student.',

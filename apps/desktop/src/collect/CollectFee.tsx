@@ -200,6 +200,11 @@ function without(ticked: Draft['ticked'], key: string): Draft['ticked'] {
   return Object.fromEntries(Object.entries(ticked).filter(([item]) => item !== key))
 }
 
+// Every due ticked; a due already ticked keeps the amount typed for it.
+function tickAll(dues: readonly DueItem[], ticked: Draft['ticked']): Draft['ticked'] {
+  return Object.fromEntries(dues.map((due) => [dueKey(due), ticked[dueKey(due)] ?? formatRupeesInput(due.remaining)]))
+}
+
 function dueLabel(due: DueItem): string {
   return due.kind === 'fee' ? `${due.headName}, ${due.periodLabel}` : due.reason
 }
@@ -706,8 +711,17 @@ export function CollectFee({ session }: { session: Session }) {
       </div>
     )
   } else {
+    const allDues = dues
     duesContent = (
-      <ul>
+      // Ctrl+A in the list ticks every due; in an amount box it still selects the text.
+      <ul
+        onKeyDown={(event) => {
+          if (event.ctrlKey && event.key.toLowerCase() === 'a' && !(event.target instanceof HTMLInputElement)) {
+            event.preventDefault()
+            collect.edit((current) => ({ ...current, ticked: tickAll(allDues, current.ticked) }))
+          }
+        }}
+      >
         {dues.map((due) => (
           <DueRow
             key={dueKey(due)}
@@ -753,9 +767,20 @@ export function CollectFee({ session }: { session: Session }) {
         </Panel>
         {student !== null && (
           <Panel className="overflow-hidden">
-            <div className="flex flex-wrap items-baseline justify-between gap-1.5 px-4.5 pt-3.5 pb-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4.5 pt-3.5 pb-2">
               <h2 className="font-display text-xl font-semibold">{words.dues.title}</h2>
-              <span className="text-[13px] text-ink-muted">{words.dues.help}</span>
+              <span className="flex-1 text-[13px] text-ink-muted">{words.dues.help}</span>
+              {dues !== null && dues.length > 0 && (
+                <Button
+                  variant="secondary"
+                  className="h-8 rounded-sm px-2.5 text-[13px]"
+                  aria-keyshortcuts="Control+A"
+                  onClick={() => collect.edit((current) => ({ ...current, ticked: tickAll(dues, current.ticked) }))}
+                >
+                  {words.dues.tickAll}
+                  <Shortcut keys={words.dues.tickAllKeys} />
+                </Button>
+              )}
             </div>
             {duesContent}
           </Panel>
